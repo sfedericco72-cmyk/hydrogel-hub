@@ -6,11 +6,12 @@ import { useDevices, isOnline, hasAlert } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type FilterType = "all" | "alerts" | string;
+type ClientFilter = "all" | string; // "all" or specific client name
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
+  const [alertsOnly, setAlertsOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
   const { data: devices = [], isLoading, refetch } = useDevices();
@@ -28,12 +29,18 @@ export default function Dashboard() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [devices]);
 
-  const isSpecificClient = !["all", "alerts"].includes(filter);
+  const isSpecificClient = clientFilter !== "all";
+
+  // Compute alert count scoped to current client filter
+  const scopedDevices = isSpecificClient
+    ? devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter)
+    : devices;
+  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
 
   const filtered = devices
     .filter(d => {
-      if (filter === "alerts") return hasAlert(d);
-      if (isSpecificClient) return (d.customer_name || "Sin cliente") === filter;
+      if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
+      if (alertsOnly && !hasAlert(d)) return false;
       return true;
     })
     .filter(d =>
@@ -95,11 +102,11 @@ export default function Dashboard() {
           <div className="flex flex-col gap-1">
             {/* Top-level filters */}
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={filter === "all"} onClick={() => setFilter("all")}>
+              <FilterBtn active={clientFilter === "all" && !alertsOnly} onClick={() => { setClientFilter("all"); setAlertsOnly(false); }}>
                 Todos ({devices.length})
               </FilterBtn>
-              <FilterBtn active={filter === "alerts"} onClick={() => setFilter("alerts")} danger>
-                Alertas ({alertCount})
+              <FilterBtn active={alertsOnly} onClick={() => setAlertsOnly(prev => !prev)} danger>
+                Alertas ({scopedAlertCount})
               </FilterBtn>
             </div>
 
@@ -119,9 +126,9 @@ export default function Dashboard() {
                   {clients.map(([name, count]) => (
                     <button
                       key={name}
-                      onClick={() => setFilter(filter === name ? "all" : name)}
+                      onClick={() => setClientFilter(clientFilter === name ? "all" : name)}
                       className={`flex items-center justify-between rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-                        filter === name
+                        clientFilter === name
                           ? "bg-primary/20 text-primary font-medium"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
