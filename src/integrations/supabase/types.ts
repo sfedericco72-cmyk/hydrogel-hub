@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      device_cuts_history: {
+        Row: {
+          created_at: string
+          cut_date: string
+          daily_cuts: number | null
+          fixno: string
+          id: string
+          total_cuts: number
+        }
+        Insert: {
+          created_at?: string
+          cut_date: string
+          daily_cuts?: number | null
+          fixno: string
+          id?: string
+          total_cuts?: number
+        }
+        Update: {
+          created_at?: string
+          cut_date?: string
+          daily_cuts?: number | null
+          fixno?: string
+          id?: string
+          total_cuts?: number
+        }
+        Relationships: []
+      }
       devices: {
         Row: {
           address: string | null
