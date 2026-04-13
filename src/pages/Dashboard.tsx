@@ -1,24 +1,29 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw } from "lucide-react";
+import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, Crown } from "lucide-react";
 import { useState } from "react";
 import { useDevices, isOnline, hasAlert } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const KMG_CLIENT = "CH/KMG ANALYTICS SPA";
+
 export default function Dashboard() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "alerts">("all");
+  const [filter, setFilter] = useState<"all" | "alerts" | "own" | "clients">("all");
   const [syncing, setSyncing] = useState(false);
   const { data: devices = [], isLoading, refetch } = useDevices();
 
-  const totalCutsToday = devices.reduce((sum, d) => sum + (d.cuts_today ?? 0), 0);
   const onlineCount = devices.filter(isOnline).length;
   const alertCount = devices.filter(hasAlert).length;
+  const ownDevices = devices.filter(d => d.customer_name === KMG_CLIENT);
+  const clientDevices = devices.filter(d => d.customer_name && d.customer_name !== KMG_CLIENT);
 
   const filtered = devices
     .filter(d => {
       if (filter === "alerts") return hasAlert(d);
+      if (filter === "own") return d.customer_name === KMG_CLIENT;
+      if (filter === "clients") return d.customer_name && d.customer_name !== KMG_CLIENT;
       return true;
     })
     .filter(d =>
@@ -26,6 +31,21 @@ export default function Dashboard() {
       (d.customer_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (d.fixno ?? "").toLowerCase().includes(search.toLowerCase())
     );
+
+  // Group filtered devices by customer
+  const grouped = filtered.reduce<Record<string, typeof filtered>>((acc, d) => {
+    const key = d.customer_name || "Sin cliente";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(d);
+    return acc;
+  }, {});
+
+  // Sort: KMG first, then alphabetically
+  const sortedGroups = Object.entries(grouped).sort(([a], [b]) => {
+    if (a === KMG_CLIENT) return -1;
+    if (b === KMG_CLIENT) return 1;
+    return a.localeCompare(b);
+  });
 
   async function handleSync() {
     setSyncing(true);
@@ -73,7 +93,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter("all")}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -81,6 +101,24 @@ export default function Dashboard() {
               }`}
             >
               Todos ({devices.length})
+            </button>
+            <button
+              onClick={() => setFilter("own")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                filter === "own" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
+              }`}
+            >
+              <Crown className="h-3.5 w-3.5" />
+              Propios ({ownDevices.length})
+            </button>
+            <button
+              onClick={() => setFilter("clients")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                filter === "clients" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Clientes ({clientDevices.length})
             </button>
             <button
               onClick={() => setFilter("alerts")}
@@ -106,12 +144,29 @@ export default function Dashboard() {
         {isLoading ? (
           <div className="py-12 text-center text-muted-foreground">Cargando dispositivos...</div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map(device => (
-              <DeviceCard key={device.id} device={device} />
+          <div className="space-y-6">
+            {sortedGroups.map(([clientName, clientDevices]) => (
+              <div key={clientName}>
+                <div className="mb-3 flex items-center gap-2">
+                  {clientName === KMG_CLIENT ? (
+                    <Crown className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    {clientName === KMG_CLIENT ? "Propios (KMG Analytics)" : clientName}
+                  </h2>
+                  <span className="text-xs text-muted-foreground">({clientDevices.length})</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {clientDevices.map(device => (
+                    <DeviceCard key={device.id} device={device} />
+                  ))}
+                </div>
+              </div>
             ))}
-            {filtered.length === 0 && (
-              <div className="col-span-full py-12 text-center text-muted-foreground">
+            {sortedGroups.length === 0 && (
+              <div className="py-12 text-center text-muted-foreground">
                 No se encontraron dispositivos
               </div>
             )}
