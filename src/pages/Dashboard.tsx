@@ -47,6 +47,7 @@ export default function Dashboard() {
     scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
+  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -61,7 +62,6 @@ export default function Dashboard() {
 
   const filtered = scopedDevices
     .filter(d => {
-      if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
       if (alertsOnly && !hasAlert(d)) return false;
       if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
       return true;
