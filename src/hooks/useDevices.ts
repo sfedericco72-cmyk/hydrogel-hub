@@ -37,6 +37,38 @@ export function useDevice(id: string | undefined) {
   });
 }
 
+/** Map of fixno → last date with cuts > 0 */
+export function useLastCutDates() {
+  return useQuery({
+    queryKey: ["last-cut-dates"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_cuts_history")
+        .select("fixno, cut_date")
+        .gt("daily_cuts", 0)
+        .order("cut_date", { ascending: false });
+
+      if (error) throw error;
+
+      const map = new Map<string, string>();
+      data?.forEach((r) => {
+        if (!map.has(r.fixno)) map.set(r.fixno, r.cut_date);
+      });
+      return map;
+    },
+  });
+}
+
+/** Device is "active" if it had cuts within the last 2 months */
+export function isDeviceActive(fixno: string, lastCutDates: Map<string, string> | undefined): boolean {
+  if (!lastCutDates) return true; // default to active while loading
+  const lastCut = lastCutDates.get(fixno);
+  if (!lastCut) return false;
+  const twoMonthsAgo = new Date();
+  twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+  return new Date(lastCut) >= twoMonthsAgo;
+}
+
 export function isOnline(device: Device): boolean {
   if (!device.latest_online_time) return false;
   const lastOnline = new Date(device.latest_online_time);

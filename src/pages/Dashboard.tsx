@@ -1,25 +1,44 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight } from "lucide-react";
+import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useDevices, isOnline, hasAlert } from "@/hooks/useDevices";
+import { useDevices, isOnline, hasAlert, useLastCutDates, isDeviceActive } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type ClientFilter = "all" | string; // "all" or specific client name
+type ClientFilter = "all" | string;
+type ActivityFilter = "all" | "active" | "inactive";
+
+function formatSyncDate(dateStr: string | null) {
+  if (!dateStr) return "Nunca";
+  return new Date(dateStr).toLocaleString("es-CL", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+}
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   const [alertsOnly, setAlertsOnly] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
   const { data: devices = [], isLoading, refetch } = useDevices();
+  const { data: lastCutDates } = useLastCutDates();
 
   const onlineCount = devices.filter(isOnline).length;
   const alertCount = devices.filter(hasAlert).length;
+  const lastSyncDate = useMemo(() => {
+    if (devices.length === 0) return null;
+    return devices.reduce((latest, d) =>
+      !latest || d.last_synced_at > latest ? d.last_synced_at : latest,
+      "" as string
+    );
+  }, [devices]);
 
-  // Dynamic client list from data
+  const activeCount = devices.filter(d => isDeviceActive(d.fixno, lastCutDates)).length;
+  const inactiveCount = devices.length - activeCount;
+
   const clients = useMemo(() => {
     const map = new Map<string, number>();
     devices.forEach(d => {
@@ -31,7 +50,6 @@ export default function Dashboard() {
 
   const isSpecificClient = clientFilter !== "all";
 
-  // Compute alert count scoped to current client filter
   const scopedDevices = isSpecificClient
     ? devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter)
     : devices;
@@ -41,6 +59,8 @@ export default function Dashboard() {
     .filter(d => {
       if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
       if (alertsOnly && !hasAlert(d)) return false;
+      if (activityFilter === "active" && !isDeviceActive(d.fixno, lastCutDates)) return false;
+      if (activityFilter === "inactive" && isDeviceActive(d.fixno, lastCutDates)) return false;
       return true;
     })
     .filter(d =>
@@ -49,7 +69,6 @@ export default function Dashboard() {
       (d.fixno ?? "").toLowerCase().includes(search.toLowerCase())
     );
 
-  // Group by customer
   const grouped = filtered.reduce<Record<string, typeof filtered>>((acc, d) => {
     const key = d.customer_name || "Sin cliente";
     if (!acc[key]) acc[key] = [];
@@ -80,6 +99,10 @@ export default function Dashboard() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Panel de Control</h1>
             <p className="mt-1 text-sm text-muted-foreground">Seguimiento de máquinas de corte de hidrogel</p>
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span>Última sincronización: {formatSyncDate(lastSyncDate)}</span>
+            </div>
           </div>
           <button
             onClick={handleSync}
@@ -102,8 +125,22 @@ export default function Dashboard() {
           <div className="flex flex-col gap-1">
             {/* Top-level filters */}
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={clientFilter === "all" && !alertsOnly} onClick={() => { setClientFilter("all"); setAlertsOnly(false); }}>
+              <FilterBtn active={clientFilter === "all" && !alertsOnly && activityFilter === "all"} onClick={() => { setClientFilter("all"); setAlertsOnly(false); setActivityFilter("all"); }}>
                 Todos ({devices.length})
+              </FilterBtn>
+              <FilterBtn
+                active={activityFilter === "active"}
+                onClick={() => setActivityFilter(prev => prev === "active" ? "all" : "active")}
+              >
+                <Activity className="mr-1 inline h-3.5 w-3.5" />
+                Activos ({activeCount})
+              </FilterBtn>
+              <FilterBtn
+                active={activityFilter === "inactive"}
+                onClick={() => setActivityFilter(prev => prev === "inactive" ? "all" : "inactive")}
+                danger
+              >
+                Inactivos ({inactiveCount})
               </FilterBtn>
               <FilterBtn active={alertsOnly} onClick={() => setAlertsOnly(prev => !prev)} danger>
                 Alertas ({scopedAlertCount})
