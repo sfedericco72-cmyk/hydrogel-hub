@@ -102,11 +102,11 @@ export default function Dashboard() {
           <div className="flex flex-col gap-1">
             {/* Top-level filters */}
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={filter === "all"} onClick={() => setFilter("all")}>
+              <FilterBtn active={clientFilter === "all" && !alertsOnly} onClick={() => { setClientFilter("all"); setAlertsOnly(false); }}>
                 Todos ({devices.length})
               </FilterBtn>
-              <FilterBtn active={filter === "alerts"} onClick={() => setFilter("alerts")} danger>
-                Alertas ({alertCount})
+              <FilterBtn active={alertsOnly} onClick={() => setAlertsOnly(prev => !prev)} danger>
+                Alertas ({scopedAlertCount})
               </FilterBtn>
             </div>
 
