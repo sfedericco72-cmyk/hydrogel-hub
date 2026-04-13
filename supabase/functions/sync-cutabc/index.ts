@@ -136,14 +136,42 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 5. Save daily snapshot to cuts history
-    const today = new Date().toISOString().split("T")[0];
-    const historyData = activeDevices.map((d) => ({
-      fixno: d.fixno,
-      cut_date: today,
-      total_cuts: parseInt(d.useqty) || 0,
-      daily_cuts: 0, // will be calculated by comparing with previous day
-    }));
+    // 5. Save daily snapshot to cuts history with daily_cuts calculation
+    // Use Chile time (UTC-3 in summer / UTC-4 in winter, approximate UTC-3)
+    const now = new Date();
+    const chileOffset = -3; // approximate CLT/CLST
+    const chileNow = new Date(now.getTime() + chileOffset * 3600000);
+    const today = chileNow.toISOString().split("T")[0];
+
+    // Get yesterday's date for daily_cuts calculation
+    const yesterday = new Date(chileNow);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+    // Fetch yesterday's snapshots to calculate daily difference
+    const fixnos = activeDevices.map((d) => d.fixno);
+    const { data: yesterdayData } = await supabase
+      .from("device_cuts_history")
+      .select("fixno, total_cuts")
+      .eq("cut_date", yesterdayStr)
+      .in("fixno", fixnos);
+
+    const yesterdayMap = new Map<string, number>();
+    if (yesterdayData) {
+      yesterdayData.forEach((r) => yesterdayMap.set(r.fixno, r.total_cuts));
+    }
+
+    const historyData = activeDevices.map((d) => {
+      const currentTotal = parseInt(d.useqty) || 0;
+      const prevTotal = yesterdayMap.get(d.fixno);
+      const dailyCuts = prevTotal !== undefined ? Math.max(0, currentTotal - prevTotal) : 0;
+      return {
+        fixno: d.fixno,
+        cut_date: today,
+        total_cuts: currentTotal,
+        daily_cuts: dailyCuts,
+      };
+    });
 
     if (historyData.length > 0) {
       for (let i = 0; i < historyData.length; i += 50) {
@@ -157,7 +185,7 @@ Deno.serve(async (req) => {
         }
       }
     }
-    console.log(`Saved ${historyData.length} daily snapshots for ${today}`);
+    console.log(`Saved ${historyData.length} daily snapshots for ${today} (with daily_cuts)`);
 
     return new Response(
       JSON.stringify({
