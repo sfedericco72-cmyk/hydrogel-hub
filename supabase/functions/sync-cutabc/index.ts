@@ -28,12 +28,19 @@ async function loginCutABC(): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       companyNo,
-      loginName: username,
-      pwd: password,
+      userName: username,
+      userPwd: password,
     }),
   });
 
-  const data = await res.json();
+  const text = await res.text();
+  console.log("Login response status:", res.status, "body preview:", text.substring(0, 200));
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`CutABC login returned non-JSON (status ${res.status}): ${text.substring(0, 300)}`);
+  }
   if (!data.sessionId) {
     throw new Error(`CutABC login failed: ${JSON.stringify(data)}`);
   }
