@@ -100,9 +100,9 @@ Deno.serve(async (req) => {
     const allDevices = await fetchAllDevices(sessionId);
     console.log(`Fetched ${allDevices.length} total devices`);
 
-    // 3. Filter: only devices active in last 30 days
-    const activeDevices = allDevices.filter(isActiveInLast30Days);
-    console.log(`${activeDevices.length} devices active in last 30 days`);
+    // 3. Sync ALL devices (no filter)
+    const activeDevices = allDevices;
+    console.log(`Syncing all ${activeDevices.length} devices`);
 
     // 4. Upsert to database
     const upsertData = activeDevices.map((d) => ({
