@@ -142,11 +142,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 5. Save daily snapshot to cuts history
+    const today = new Date().toISOString().split("T")[0];
+    const historyData = activeDevices.map((d) => ({
+      fixno: d.fixno,
+      cut_date: today,
+      total_cuts: parseInt(d.useqty) || 0,
+      daily_cuts: 0, // will be calculated by comparing with previous day
+    }));
+
+    if (historyData.length > 0) {
+      for (let i = 0; i < historyData.length; i += 50) {
+        const chunk = historyData.slice(i, i + 50);
+        const { error } = await supabase
+          .from("device_cuts_history")
+          .upsert(chunk, { onConflict: "fixno,cut_date" });
+
+        if (error) {
+          console.error(`History upsert error at chunk ${i}: ${error.message}`);
+        }
+      }
+    }
+    console.log(`Saved ${historyData.length} daily snapshots for ${today}`);
+
     return new Response(
       JSON.stringify({
         success: true,
         total_fetched: allDevices.length,
         active_synced: activeDevices.length,
+        history_saved: historyData.length,
         timestamp: new Date().toISOString(),
       }),
       {
