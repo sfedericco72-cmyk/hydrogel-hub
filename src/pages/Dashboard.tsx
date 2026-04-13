@@ -48,9 +48,18 @@ export default function Dashboard() {
     return counts;
   }, [scopedDevices, lastCutDates]);
 
-  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
+  const clients = useMemo(() => {
+    const map = new Map<string, number>();
+    devices.forEach(d => {
+      const name = d.customer_name || "Sin cliente";
+      map.set(name, (map.get(name) ?? 0) + 1);
+    });
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [devices]);
 
-  const filtered = devices
+  const isSpecificClient = clientFilter !== "all";
+
+  const filtered = scopedDevices
     .filter(d => {
       if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
       if (alertsOnly && !hasAlert(d)) return false;
