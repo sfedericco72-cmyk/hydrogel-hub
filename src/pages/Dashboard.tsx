@@ -10,7 +10,8 @@ type ClientFilter = "all" | string; // "all" or specific client name
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
+  const [alertsOnly, setAlertsOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
   const { data: devices = [], isLoading, refetch } = useDevices();
