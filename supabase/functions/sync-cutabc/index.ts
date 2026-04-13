@@ -61,7 +61,14 @@ async function fetchDevices(sessionId: string): Promise<CutABCDevice[]> {
     }),
   });
 
-  const data = await res.json();
+  const text = await res.text();
+  console.log("Devices response status:", res.status, "body preview:", text.substring(0, 500));
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Devices fetch returned non-JSON: ${text.substring(0, 300)}`);
+  }
   return data.rows || [];
 }
 
