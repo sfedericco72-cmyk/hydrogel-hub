@@ -9,12 +9,19 @@ const CUTABC_BASE = "http://www.cutabc.cn:8091/cut_app/app";
 
 interface CutABCDevice {
   fixno: string;
+  fixna: string;
   branna: string;
   statena2: string;
-  useqty: number;
-  balaqty: number;
+  useqty: string;
+  balaqty: string;
   latestOnlineTime: string;
-  fixip: string;
+  ipAddr: string;
+  userName: string;
+  userMobile: string;
+  userEmail: string;
+  useTime: string;
+  createdt: string;
+  remark: string;
   [key: string]: unknown;
 }
 
@@ -33,48 +40,47 @@ async function loginCutABC(): Promise<string> {
     }),
   });
 
-  const text = await res.text();
-  console.log("Login response status:", res.status, "body preview:", text.substring(0, 200));
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`CutABC login returned non-JSON (status ${res.status}): ${text.substring(0, 300)}`);
-  }
+  const data = await res.json();
   if (data.code != 0 || !data.data?.sessionId) {
     throw new Error(`CutABC login failed: ${JSON.stringify(data)}`);
   }
   return data.data.sessionId;
 }
 
-async function fetchDevices(sessionId: string): Promise<CutABCDevice[]> {
-  const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: `JSESSIONID=${sessionId}`,
-    },
-    body: new URLSearchParams({
-      itemno: "fixlstqry",
-      page: "1",
-      rows: "500",
-    }),
-  });
+async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
+  const allDevices: CutABCDevice[] = [];
+  let pageIndex = 1;
+  const pageSize = 100;
 
-  const text = await res.text();
-  console.log("Devices response status:", res.status, "body preview:", text.substring(0, 500));
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Devices fetch returned non-JSON: ${text.substring(0, 300)}`);
+  while (true) {
+    const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        sessionId: sessionId,
+      },
+      body: new URLSearchParams({
+        itemno: "fixlstqry",
+        data: "[]",
+        pageindex: String(pageIndex),
+        pagesize: String(pageSize),
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success !== "1" || !data.listTask) break;
+
+    allDevices.push(...data.listTask);
+    if (allDevices.length >= parseInt(data.reccnt)) break;
+    pageIndex++;
   }
-  return data.rows || [];
+
+  return allDevices;
 }
 
 function isActiveInLast30Days(device: CutABCDevice): boolean {
   if (!device.latestOnlineTime) return false;
-  const lastOnline = new Date(device.latestOnlineTime);
+  const lastOnline = new Date(device.latestOnlineTime.replace(" ", "T"));
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   return lastOnline >= thirtyDaysAgo;
@@ -97,7 +103,7 @@ Deno.serve(async (req) => {
 
     // 2. Fetch all devices
     console.log("Fetching devices...");
-    const allDevices = await fetchDevices(sessionId);
+    const allDevices = await fetchAllDevices(sessionId);
     console.log(`Fetched ${allDevices.length} total devices`);
 
     // 3. Filter: only devices active in last 30 days
@@ -107,24 +113,32 @@ Deno.serve(async (req) => {
     // 4. Upsert to database
     const upsertData = activeDevices.map((d) => ({
       fixno: d.fixno,
-      branch_name: d.branna || null,
+      branch_name: d.fixna || null,
       customer_name: d.branna || null,
       status: d.statena2 || "unknown",
-      total_cuts: d.useqty || 0,
-      remaining_cuts: d.balaqty || 0,
-      latest_online_time: d.latestOnlineTime || null,
-      ip_address: d.fixip || null,
+      total_cuts: parseInt(d.useqty) || 0,
+      remaining_cuts: parseInt(d.balaqty) || 0,
+      ip_address: d.ipAddr || null,
+      latest_online_time: d.latestOnlineTime
+        ? new Date(d.latestOnlineTime.replace(" ", "T")).toISOString()
+        : null,
+      contact_name: d.userName || null,
+      contact_phone: d.userMobile || null,
       raw_data: d,
       last_synced_at: new Date().toISOString(),
     }));
 
     if (upsertData.length > 0) {
-      const { error } = await supabase
-        .from("devices")
-        .upsert(upsertData, { onConflict: "fixno" });
+      // Batch upsert in chunks of 50
+      for (let i = 0; i < upsertData.length; i += 50) {
+        const chunk = upsertData.slice(i, i + 50);
+        const { error } = await supabase
+          .from("devices")
+          .upsert(chunk, { onConflict: "fixno" });
 
-      if (error) {
-        throw new Error(`Upsert failed: ${error.message}`);
+        if (error) {
+          throw new Error(`Upsert failed at chunk ${i}: ${error.message}`);
+        }
       }
     }
 
