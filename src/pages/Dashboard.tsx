@@ -123,10 +123,21 @@ export default function Dashboard() {
 
               {clientsExpanded && (
                 <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-2">
+                  <button
+                    onClick={() => setClientFilter("all")}
+                    className={`flex items-center justify-between rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+                      clientFilter === "all"
+                        ? "bg-primary/20 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    <span>Todos los clientes</span>
+                    <span className="ml-2 shrink-0 text-xs opacity-70">{devices.length}</span>
+                  </button>
                   {clients.map(([name, count]) => (
                     <button
                       key={name}
-                      onClick={() => setClientFilter(clientFilter === name ? "all" : name)}
+                      onClick={() => setClientFilter(name)}
                       className={`flex items-center justify-between rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
                         clientFilter === name
                           ? "bg-primary/20 text-primary font-medium"
