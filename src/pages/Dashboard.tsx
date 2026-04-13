@@ -126,9 +126,9 @@ export default function Dashboard() {
                   {clients.map(([name, count]) => (
                     <button
                       key={name}
-                      onClick={() => setFilter(filter === name ? "all" : name)}
+                      onClick={() => setClientFilter(clientFilter === name ? "all" : name)}
                       className={`flex items-center justify-between rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-                        filter === name
+                        clientFilter === name
                           ? "bg-primary/20 text-primary font-medium"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
