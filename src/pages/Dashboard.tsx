@@ -36,26 +36,18 @@ export default function Dashboard() {
     );
   }, [devices]);
 
+  // Scope devices by client filter first
+  const scopedDevices = useMemo(() => {
+    if (clientFilter === "all") return devices;
+    return devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter);
+  }, [devices, clientFilter]);
+
   const stateCounts = useMemo(() => {
     const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0, inactive: 0 };
-    devices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
+    scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
-  }, [devices, lastCutDates]);
+  }, [scopedDevices, lastCutDates]);
 
-  const clients = useMemo(() => {
-    const map = new Map<string, number>();
-    devices.forEach(d => {
-      const name = d.customer_name || "Sin cliente";
-      map.set(name, (map.get(name) ?? 0) + 1);
-    });
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [devices]);
-
-  const isSpecificClient = clientFilter !== "all";
-
-  const scopedDevices = isSpecificClient
-    ? devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter)
-    : devices;
   const scopedAlertCount = scopedDevices.filter(hasAlert).length;
 
   const filtered = devices
