@@ -36,11 +36,18 @@ export default function Dashboard() {
     );
   }, [devices]);
 
+  // Scope devices by client filter first
+  const scopedDevices = useMemo(() => {
+    if (clientFilter === "all") return devices;
+    return devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter);
+  }, [devices, clientFilter]);
+
   const stateCounts = useMemo(() => {
     const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0, inactive: 0 };
-    devices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
+    scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
-  }, [devices, lastCutDates]);
+  }, [scopedDevices, lastCutDates]);
+  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -53,14 +60,8 @@ export default function Dashboard() {
 
   const isSpecificClient = clientFilter !== "all";
 
-  const scopedDevices = isSpecificClient
-    ? devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter)
-    : devices;
-  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
-
-  const filtered = devices
+  const filtered = scopedDevices
     .filter(d => {
-      if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
       if (alertsOnly && !hasAlert(d)) return false;
       if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
       return true;
@@ -131,7 +132,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap gap-2">
               <FilterBtn active={stateFilter === "all" && !alertsOnly} onClick={() => { setStateFilter("all"); setAlertsOnly(false); }}>
-                Todos ({devices.length})
+                Todos ({scopedDevices.length})
               </FilterBtn>
               <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
                 <Activity className="mr-1 inline h-3.5 w-3.5" />
