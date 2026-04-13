@@ -1,4 +1,4 @@
-import { Device, isOnline, hasAlert } from "@/hooks/useDevices";
+import { Device, isOnline, getDeviceState, DEVICE_STATE_LABELS, type DeviceState } from "@/hooks/useDevices";
 import { StatusBadge } from "./StatusBadge";
 import { Scissors, Wifi, WifiOff, ChevronRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -8,17 +8,18 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
 }
 
-function formatDateTime(dateStr: string | null) {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleString("es-AR", {
-    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
-  });
-}
+const stateStatusMap: Record<DeviceState, "online" | "offline" | "warning"> = {
+  stock: "warning",
+  active: "online",
+  disconnected: "warning",
+  inactive: "offline",
+};
 
-export function DeviceCard({ device }: { device: Device }) {
+export function DeviceCard({ device, lastCutDates }: { device: Device; lastCutDates?: Map<string, string> }) {
   const navigate = useNavigate();
   const online = isOnline(device);
   const lowCuts = (device.remaining_cuts ?? 0) <= 10;
+  const deviceState = getDeviceState(device, lastCutDates);
 
   return (
     <div
@@ -37,9 +38,9 @@ export function DeviceCard({ device }: { device: Device }) {
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         <StatusBadge
-          status={device.status === "enabled" ? "online" : "offline"}
-          label={device.status === "enabled" ? "Activo" : "Inactivo"}
-          pulse={device.status === "enabled"}
+          status={stateStatusMap[deviceState]}
+          label={DEVICE_STATE_LABELS[deviceState]}
+          pulse={deviceState === "active"}
         />
         <StatusBadge
           status={online ? "online" : "offline"}

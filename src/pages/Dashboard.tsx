@@ -1,13 +1,13 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity } from "lucide-react";
+import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useDevices, isOnline, hasAlert, useLastCutDates, isDeviceActive } from "@/hooks/useDevices";
+import { useDevices, isOnline, hasAlert, useLastCutDates, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type ClientFilter = "all" | string;
-type ActivityFilter = "all" | "active" | "inactive";
+type StateFilter = "all" | DeviceState;
 
 function formatSyncDate(dateStr: string | null) {
   if (!dateStr) return "Nunca";
@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   const [alertsOnly, setAlertsOnly] = useState(false);
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
   const { data: devices = [], isLoading, refetch } = useDevices();
@@ -36,8 +36,11 @@ export default function Dashboard() {
     );
   }, [devices]);
 
-  const activeCount = devices.filter(d => isDeviceActive(d.fixno, lastCutDates)).length;
-  const inactiveCount = devices.length - activeCount;
+  const stateCounts = useMemo(() => {
+    const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0, inactive: 0 };
+    devices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
+    return counts;
+  }, [devices, lastCutDates]);
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -59,8 +62,7 @@ export default function Dashboard() {
     .filter(d => {
       if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
       if (alertsOnly && !hasAlert(d)) return false;
-      if (activityFilter === "active" && !isDeviceActive(d.fixno, lastCutDates)) return false;
-      if (activityFilter === "inactive" && isDeviceActive(d.fixno, lastCutDates)) return false;
+      if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
       return true;
     })
     .filter(d =>
@@ -90,6 +92,10 @@ export default function Dashboard() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  function toggleStateFilter(state: DeviceState) {
+    setStateFilter(prev => prev === state ? "all" : state);
   }
 
   return (
@@ -123,24 +129,25 @@ export default function Dashboard() {
 
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-col gap-1">
-            {/* Top-level filters */}
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={clientFilter === "all" && !alertsOnly && activityFilter === "all"} onClick={() => { setClientFilter("all"); setAlertsOnly(false); setActivityFilter("all"); }}>
+              <FilterBtn active={stateFilter === "all" && !alertsOnly} onClick={() => { setStateFilter("all"); setAlertsOnly(false); }}>
                 Todos ({devices.length})
               </FilterBtn>
-              <FilterBtn
-                active={activityFilter === "active"}
-                onClick={() => setActivityFilter(prev => prev === "active" ? "all" : "active")}
-              >
+              <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
                 <Activity className="mr-1 inline h-3.5 w-3.5" />
-                Activos ({activeCount})
+                Activos ({stateCounts.active})
               </FilterBtn>
-              <FilterBtn
-                active={activityFilter === "inactive"}
-                onClick={() => setActivityFilter(prev => prev === "inactive" ? "all" : "inactive")}
-                danger
-              >
-                Inactivos ({inactiveCount})
+              <FilterBtn active={stateFilter === "disconnected"} onClick={() => toggleStateFilter("disconnected")} warning>
+                <WifiOff className="mr-1 inline h-3.5 w-3.5" />
+                Desconectados ({stateCounts.disconnected})
+              </FilterBtn>
+              <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} danger>
+                <Archive className="mr-1 inline h-3.5 w-3.5" />
+                Inactivos ({stateCounts.inactive})
+              </FilterBtn>
+              <FilterBtn active={stateFilter === "stock"} onClick={() => toggleStateFilter("stock")}>
+                <Package className="mr-1 inline h-3.5 w-3.5" />
+                En stock ({stateCounts.stock})
               </FilterBtn>
               <FilterBtn active={alertsOnly} onClick={() => setAlertsOnly(prev => !prev)} danger>
                 Alertas ({scopedAlertCount})
@@ -215,7 +222,7 @@ export default function Dashboard() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {clientDevs.map(device => (
-                    <DeviceCard key={device.id} device={device} />
+                    <DeviceCard key={device.id} device={device} lastCutDates={lastCutDates} />
                   ))}
                 </div>
               </div>
@@ -230,15 +237,17 @@ export default function Dashboard() {
   );
 }
 
-function FilterBtn({ active, onClick, children, danger }: {
-  active: boolean; onClick: () => void; children: React.ReactNode; danger?: boolean;
+function FilterBtn({ active, onClick, children, danger, warning }: {
+  active: boolean; onClick: () => void; children: React.ReactNode; danger?: boolean; warning?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
         active
-          ? danger ? "bg-status-offline text-foreground" : "bg-primary text-primary-foreground"
+          ? danger ? "bg-status-offline text-foreground"
+            : warning ? "bg-yellow-600/80 text-foreground"
+            : "bg-primary text-primary-foreground"
           : "bg-secondary text-secondary-foreground hover:bg-accent"
       }`}
     >
