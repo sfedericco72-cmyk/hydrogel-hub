@@ -1,29 +1,48 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, Crown } from "lucide-react";
-import { useState } from "react";
+import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, Crown, ChevronDown, ChevronRight } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useDevices, isOnline, hasAlert } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const KMG_CLIENT = "CH/KMG ANALYTICS SPA";
 
+type FilterType = "all" | "alerts" | "own" | "clients" | string; // string = specific client name
+
 export default function Dashboard() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "alerts" | "own" | "clients">("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [syncing, setSyncing] = useState(false);
+  const [expandedClients, setExpandedClients] = useState(true);
   const { data: devices = [], isLoading, refetch } = useDevices();
 
   const onlineCount = devices.filter(isOnline).length;
   const alertCount = devices.filter(hasAlert).length;
   const ownDevices = devices.filter(d => d.customer_name === KMG_CLIENT);
-  const clientDevices = devices.filter(d => d.customer_name && d.customer_name !== KMG_CLIENT);
+
+  // Get unique external client names
+  const externalClients = useMemo(() => {
+    const clients = new Map<string, number>();
+    devices.forEach(d => {
+      if (d.customer_name && d.customer_name !== KMG_CLIENT) {
+        clients.set(d.customer_name, (clients.get(d.customer_name) ?? 0) + 1);
+      }
+    });
+    return Array.from(clients.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [devices]);
+
+  const totalExternalCount = externalClients.reduce((sum, [, count]) => sum + count, 0);
+
+  // Check if filter is a specific client name
+  const isSpecificClient = !["all", "alerts", "own", "clients"].includes(filter);
 
   const filtered = devices
     .filter(d => {
       if (filter === "alerts") return hasAlert(d);
       if (filter === "own") return d.customer_name === KMG_CLIENT;
       if (filter === "clients") return d.customer_name && d.customer_name !== KMG_CLIENT;
+      if (isSpecificClient) return d.customer_name === filter;
       return true;
     })
     .filter(d =>
@@ -40,7 +59,6 @@ export default function Dashboard() {
     return acc;
   }, {});
 
-  // Sort: KMG first, then alphabetically
   const sortedGroups = Object.entries(grouped).sort(([a], [b]) => {
     if (a === KMG_CLIENT) return -1;
     if (b === KMG_CLIENT) return 1;
@@ -61,6 +79,10 @@ export default function Dashboard() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  function toggleClientsExpand() {
+    setExpandedClients(prev => !prev);
   }
 
   return (
@@ -92,43 +114,60 @@ export default function Dashboard() {
           <StatCard title="Alertas" value={alertCount} icon={AlertTriangle} variant={alertCount > 0 ? "danger" : "default"} />
         </div>
 
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilter("all")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === "all" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
-              }`}
-            >
-              Todos ({devices.length})
-            </button>
-            <button
-              onClick={() => setFilter("own")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === "own" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
-              }`}
-            >
-              <Crown className="h-3.5 w-3.5" />
-              Propios ({ownDevices.length})
-            </button>
-            <button
-              onClick={() => setFilter("clients")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === "clients" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
-              }`}
-            >
-              <Users className="h-3.5 w-3.5" />
-              Clientes ({clientDevices.length})
-            </button>
-            <button
-              onClick={() => setFilter("alerts")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === "alerts" ? "bg-status-offline text-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
-              }`}
-            >
-              Con alertas ({alertCount})
-            </button>
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          {/* Filter tree */}
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap gap-2">
+              <FilterBtn active={filter === "all"} onClick={() => setFilter("all")}>
+                Todos ({devices.length})
+              </FilterBtn>
+              <FilterBtn active={filter === "own"} onClick={() => setFilter("own")} icon={<Crown className="h-3.5 w-3.5" />}>
+                Propios ({ownDevices.length})
+              </FilterBtn>
+              <FilterBtn active={filter === "alerts"} onClick={() => setFilter("alerts")} danger>
+                Alertas ({alertCount})
+              </FilterBtn>
+            </div>
+
+            {/* Clients tree */}
+            <div className="mt-1">
+              <button
+                onClick={() => {
+                  toggleClientsExpand();
+                  if (!expandedClients) setFilter("clients");
+                }}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  filter === "clients" || isSpecificClient
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground hover:bg-accent"
+                }`}
+              >
+                {expandedClients ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                <Users className="h-3.5 w-3.5" />
+                Clientes ({totalExternalCount})
+              </button>
+
+              {expandedClients && (
+                <div className="ml-4 mt-1 flex flex-col gap-0.5 border-l border-border pl-2">
+                  {externalClients.map(([name, count]) => (
+                    <button
+                      key={name}
+                      onClick={() => setFilter(name)}
+                      className={`flex items-center justify-between rounded-md px-3 py-1 text-left text-sm transition-colors ${
+                        filter === name
+                          ? "bg-primary/20 text-primary font-medium"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      }`}
+                    >
+                      <span className="truncate">{name}</span>
+                      <span className="ml-2 text-xs opacity-70">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -145,7 +184,7 @@ export default function Dashboard() {
           <div className="py-12 text-center text-muted-foreground">Cargando dispositivos...</div>
         ) : (
           <div className="space-y-6">
-            {sortedGroups.map(([clientName, clientDevices]) => (
+            {sortedGroups.map(([clientName, clientDevs]) => (
               <div key={clientName}>
                 <div className="mb-3 flex items-center gap-2">
                   {clientName === KMG_CLIENT ? (
@@ -156,10 +195,10 @@ export default function Dashboard() {
                   <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                     {clientName === KMG_CLIENT ? "Propios (KMG Analytics)" : clientName}
                   </h2>
-                  <span className="text-xs text-muted-foreground">({clientDevices.length})</span>
+                  <span className="text-xs text-muted-foreground">({clientDevs.length})</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {clientDevices.map(device => (
+                  {clientDevs.map(device => (
                     <DeviceCard key={device.id} device={device} />
                   ))}
                 </div>
@@ -174,5 +213,29 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+  );
+}
+
+function FilterBtn({ active, onClick, children, icon, danger }: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? danger
+            ? "bg-status-offline text-foreground"
+            : "bg-primary text-primary-foreground"
+          : "bg-secondary text-secondary-foreground hover:bg-accent"
+      }`}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }

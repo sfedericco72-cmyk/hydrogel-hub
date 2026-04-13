@@ -7,6 +7,7 @@ import {
 import { useDevice, isOnline } from "@/hooks/useDevices";
 import { useCutsHistory } from "@/hooks/useCutsHistory";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useState, useMemo } from "react";
 
 function formatDateTime(dateStr: string | null) {
   if (!dateStr) return "—";
@@ -15,10 +16,70 @@ function formatDateTime(dateStr: string | null) {
   });
 }
 
-function formatMonth(monthStr: string) {
+type TimeResolution = "weekly" | "monthly" | "annual";
+
+function getWeekLabel(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+  const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  return `S${weekNum} ${months[d.getMonth()]}`;
+}
+
+function getMonthLabel(monthStr: string) {
   const [year, month] = monthStr.split("-");
   const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   return `${months[parseInt(month) - 1]} ${year}`;
+}
+
+function getWeekKey(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+interface ChartPoint {
+  key: string;
+  label: string;
+  totalCuts: number;
+}
+
+function aggregateHistory(
+  history: { cut_date: string; daily_cuts: number | null }[],
+  resolution: TimeResolution
+): ChartPoint[] {
+  const now = new Date();
+  const threeMonthsAgo = new Date(now);
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+  const map = new Map<string, ChartPoint>();
+
+  for (const record of history) {
+    const recordDate = new Date(record.cut_date + "T00:00:00");
+    let key: string;
+    let label: string;
+
+    if (resolution === "weekly") {
+      // Only show last 3 months
+      if (recordDate < threeMonthsAgo) continue;
+      key = getWeekKey(record.cut_date);
+      label = getWeekLabel(record.cut_date);
+    } else if (resolution === "monthly") {
+      key = record.cut_date.substring(0, 7);
+      label = getMonthLabel(key);
+    } else {
+      key = record.cut_date.substring(0, 4);
+      label = key;
+    }
+
+    if (!map.has(key)) {
+      map.set(key, { key, label, totalCuts: 0 });
+    }
+    map.get(key)!.totalCuts += record.daily_cuts ?? 0;
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 export default function BranchDetail() {
@@ -26,18 +87,15 @@ export default function BranchDetail() {
   const navigate = useNavigate();
   const { data: device, isLoading } = useDevice(id);
   const { data: history = [] } = useCutsHistory(device?.fixno);
+  const [resolution, setResolution] = useState<TimeResolution>("monthly");
 
-  // Aggregate history by month
-  const monthlyData = history.reduce<Record<string, { month: string; label: string; totalCuts: number; days: number }>>((acc, record) => {
-    const month = record.cut_date.substring(0, 7);
-    if (!acc[month]) {
-      acc[month] = { month, label: formatMonth(month), totalCuts: 0, days: 0 };
-    }
-    acc[month].totalCuts += record.daily_cuts ?? 0;
-    acc[month].days += 1;
-    return acc;
-  }, {});
-  const chartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+  const chartData = useMemo(() => aggregateHistory(history, resolution), [history, resolution]);
+
+  const resolutionLabels: Record<TimeResolution, string> = {
+    weekly: "Semanal (últ. 3 meses)",
+    monthly: "Mensual",
+    annual: "Anual",
+  };
 
   if (isLoading) {
     return (
@@ -143,15 +201,38 @@ export default function BranchDetail() {
 
         {/* Monthly Cuts Chart */}
         <div className="mb-6 rounded-lg border border-border bg-card p-4">
-          <div className="mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Análisis mensual de cortes</h2>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Análisis de cortes</h2>
+            </div>
+            <div className="flex gap-1 rounded-lg bg-secondary p-0.5">
+              {(Object.entries(resolutionLabels) as [TimeResolution, string][]).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setResolution(key)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    resolution === key
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  angle={resolution === "weekly" ? -45 : 0}
+                  textAnchor={resolution === "weekly" ? "end" : "middle"}
+                  height={resolution === "weekly" ? 60 : 30}
+                />
                 <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip
                   contentStyle={{
