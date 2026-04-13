@@ -6,7 +6,7 @@ import { useDevices, isOnline, hasAlert } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type FilterType = "all" | "alerts" | string;
+type ClientFilter = "all" | string; // "all" or specific client name
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
