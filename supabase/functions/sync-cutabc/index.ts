@@ -41,10 +41,10 @@ async function loginCutABC(): Promise<string> {
   } catch {
     throw new Error(`CutABC login returned non-JSON (status ${res.status}): ${text.substring(0, 300)}`);
   }
-  if (!data.sessionId) {
+  if (data.code !== "0" || !data.data?.sessionId) {
     throw new Error(`CutABC login failed: ${JSON.stringify(data)}`);
   }
-  return data.sessionId;
+  return data.data.sessionId;
 }
 
 async function fetchDevices(sessionId: string): Promise<CutABCDevice[]> {
