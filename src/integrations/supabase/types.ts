@@ -14,7 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      devices: {
+        Row: {
+          address: string | null
+          branch_name: string | null
+          city: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          customer_name: string | null
+          cuts_today: number | null
+          fixno: string
+          id: string
+          ip_address: string | null
+          last_synced_at: string
+          latest_online_time: string | null
+          raw_data: Json | null
+          remaining_cuts: number | null
+          software_version: string | null
+          status: string | null
+          total_cuts: number | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          branch_name?: string | null
+          city?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          customer_name?: string | null
+          cuts_today?: number | null
+          fixno: string
+          id?: string
+          ip_address?: string | null
+          last_synced_at?: string
+          latest_online_time?: string | null
+          raw_data?: Json | null
+          remaining_cuts?: number | null
+          software_version?: string | null
+          status?: string | null
+          total_cuts?: number | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          branch_name?: string | null
+          city?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          customer_name?: string | null
+          cuts_today?: number | null
+          fixno?: string
+          id?: string
+          ip_address?: string | null
+          last_synced_at?: string
+          latest_online_time?: string | null
+          raw_data?: Json | null
+          remaining_cuts?: number | null
+          software_version?: string | null
+          status?: string | null
+          total_cuts?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
