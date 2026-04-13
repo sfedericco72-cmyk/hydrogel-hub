@@ -29,12 +29,18 @@ export default function Dashboard() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [devices]);
 
-  const isSpecificClient = !["all", "alerts"].includes(filter);
+  const isSpecificClient = clientFilter !== "all";
+
+  // Compute alert count scoped to current client filter
+  const scopedDevices = isSpecificClient
+    ? devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter)
+    : devices;
+  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
 
   const filtered = devices
     .filter(d => {
-      if (filter === "alerts") return hasAlert(d);
-      if (isSpecificClient) return (d.customer_name || "Sin cliente") === filter;
+      if (isSpecificClient && (d.customer_name || "Sin cliente") !== clientFilter) return false;
+      if (alertsOnly && !hasAlert(d)) return false;
       return true;
     })
     .filter(d =>
