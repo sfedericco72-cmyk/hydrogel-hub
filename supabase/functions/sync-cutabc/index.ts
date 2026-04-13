@@ -78,13 +78,7 @@ async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
   return allDevices;
 }
 
-function isActiveInLast30Days(device: CutABCDevice): boolean {
-  if (!device.latestOnlineTime) return false;
-  const lastOnline = new Date(device.latestOnlineTime.replace(" ", "T"));
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  return lastOnline >= thirtyDaysAgo;
-}
+// No longer filtering — sync ALL devices
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
