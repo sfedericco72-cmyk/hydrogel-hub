@@ -132,7 +132,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap gap-2">
               <FilterBtn active={stateFilter === "all" && !alertsOnly} onClick={() => { setStateFilter("all"); setAlertsOnly(false); }}>
-                Todos ({devices.length})
+                Todos ({scopedDevices.length})
               </FilterBtn>
               <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
                 <Activity className="mr-1 inline h-3.5 w-3.5" />
