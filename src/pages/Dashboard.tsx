@@ -18,6 +18,7 @@ function formatSyncDate(dateStr: string | null) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   const [alertsOnly, setAlertsOnly] = useState(false);
