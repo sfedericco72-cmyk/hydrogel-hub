@@ -96,6 +96,7 @@ export type Database = {
         Row: {
           address: string | null
           alert_email: string | null
+          alerts_enabled: boolean
           branch_name: string | null
           city: string | null
           contact_name: string | null
@@ -103,6 +104,7 @@ export type Database = {
           created_at: string
           customer_name: string | null
           cuts_today: number | null
+          first_alert_sent_at: string | null
           fixno: string
           id: string
           ip_address: string | null
@@ -118,6 +120,7 @@ export type Database = {
         Insert: {
           address?: string | null
           alert_email?: string | null
+          alerts_enabled?: boolean
           branch_name?: string | null
           city?: string | null
           contact_name?: string | null
@@ -125,6 +128,7 @@ export type Database = {
           created_at?: string
           customer_name?: string | null
           cuts_today?: number | null
+          first_alert_sent_at?: string | null
           fixno: string
           id?: string
           ip_address?: string | null
@@ -140,6 +144,7 @@ export type Database = {
         Update: {
           address?: string | null
           alert_email?: string | null
+          alerts_enabled?: boolean
           branch_name?: string | null
           city?: string | null
           contact_name?: string | null
@@ -147,6 +152,7 @@ export type Database = {
           created_at?: string
           customer_name?: string | null
           cuts_today?: number | null
+          first_alert_sent_at?: string | null
           fixno?: string
           id?: string
           ip_address?: string | null
