@@ -145,17 +145,28 @@ export default function BranchDetail() {
 
         {/* Status Grid */}
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <HardDrive className="h-4 w-4" />
-              Estado
-            </div>
-            <StatusBadge
-              status={device.status === "enabled" ? "online" : "offline"}
-              label={device.status === "enabled" ? "Activo" : "Inactivo"}
-              pulse={device.status === "enabled"}
-            />
-          </div>
+          {(() => {
+            const deviceState = device ? getDeviceState(device, lastCutDates) : "stock";
+            const stateStatusMap: Record<string, "online" | "offline" | "warning"> = {
+              active: "online",
+              inactive: "warning",
+              disconnected: "offline",
+              stock: "offline",
+            };
+            return (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <HardDrive className="h-4 w-4" />
+                  Estado
+                </div>
+                <StatusBadge
+                  status={stateStatusMap[deviceState]}
+                  label={DEVICE_STATE_LABELS[deviceState]}
+                  pulse={deviceState === "active"}
+                />
+              </div>
+            );
+          })()}
 
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
