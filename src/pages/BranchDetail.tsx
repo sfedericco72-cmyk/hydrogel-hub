@@ -124,7 +124,6 @@ export default function BranchDetail() {
     );
   }
 
-  const online = isOnline(device);
   const lowCuts = (device.remaining_cuts ?? 0) <= 10;
 
   return (
