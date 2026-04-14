@@ -1,9 +1,9 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive, Mail } from "lucide-react";
+import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -28,6 +28,7 @@ export default function Dashboard() {
   const { data: devices = [], isLoading, refetch } = useDevices();
   const { data: lastCutDates } = useLastCutDates();
   const { data: avgDailyCuts } = useAvgDailyCuts();
+  const { data: monthlyCutsMap } = useMonthlyCutsMap();
 
   const alertCount = devices.filter(d => hasAlert(d, avgDailyCuts)).length;
   const lastSyncDate = useMemo(() => {
@@ -38,14 +39,13 @@ export default function Dashboard() {
     );
   }, [devices]);
 
-  // Scope devices by client filter first
   const scopedDevices = useMemo(() => {
     if (clientFilter === "all") return devices;
     return devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter);
   }, [devices, clientFilter]);
 
   const stateCounts = useMemo(() => {
-    const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0, inactive: 0 };
+    const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0 };
     scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
@@ -59,8 +59,6 @@ export default function Dashboard() {
     });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [devices]);
-
-  const isSpecificClient = clientFilter !== "all";
 
   const filtered = scopedDevices
     .filter(d => {
@@ -152,10 +150,6 @@ export default function Dashboard() {
                 <WifiOff className="mr-1 inline h-3.5 w-3.5" />
                 Desconectados ({stateCounts.disconnected})
               </FilterBtn>
-              <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} danger>
-                <Archive className="mr-1 inline h-3.5 w-3.5" />
-                Inactivos ({stateCounts.inactive})
-              </FilterBtn>
               <FilterBtn active={stateFilter === "stock"} onClick={() => toggleStateFilter("stock")}>
                 <Package className="mr-1 inline h-3.5 w-3.5" />
                 En stock ({stateCounts.stock})
@@ -233,7 +227,7 @@ export default function Dashboard() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {clientDevs.map(device => (
-                    <DeviceCard key={device.id} device={device} lastCutDates={lastCutDates} avgDailyCuts={avgDailyCuts} />
+                    <DeviceCard key={device.id} device={device} lastCutDates={lastCutDates} avgDailyCuts={avgDailyCuts} monthlyCutsMap={monthlyCutsMap} />
                   ))}
                 </div>
               </div>
