@@ -1,7 +1,8 @@
 import { StatCard } from "@/components/StatCard";
+import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,7 +44,6 @@ export default function Dashboard() {
   const { data: avgDailyCuts } = useAvgDailyCuts();
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
 
-  const alertCount = devices.filter(d => hasAlert(d, avgDailyCuts)).length;
   const lastSyncDate = useMemo(() => {
     if (devices.length === 0) return null;
     return devices.reduce((latest, d) =>
@@ -143,10 +143,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-[auto_1fr]">
           <StatCard title="Dispositivos" value={devices.length} icon={Building2} variant="primary" />
-          <StatCard title="Cortes totales" value={devices.reduce((s, d) => s + (d.total_cuts ?? 0), 0).toLocaleString("es-AR")} icon={Scissors} variant="success" subtitle="Todos los dispositivos" />
-          <StatCard title="Alertas" value={alertCount} icon={AlertTriangle} variant={alertCount > 0 ? "danger" : "default"} />
+          <MonthlyTimeline devices={devices} monthlyCutsMap={monthlyCutsMap} />
         </div>
 
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
