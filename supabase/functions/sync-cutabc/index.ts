@@ -78,7 +78,41 @@ async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
   return allDevices;
 }
 
-// No longer filtering — sync ALL devices
+async function fetchAllTransactions(sessionId: string): Promise<Record<string, unknown>[]> {
+  const allTx: Record<string, unknown>[] = [];
+  let pageIndex = 1;
+  const pageSize = 100;
+
+  while (true) {
+    const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        sessionId: sessionId,
+      },
+      body: new URLSearchParams({
+        itemno: "custbalaqry",
+        data: JSON.stringify([
+          { billdate_beg: "" },
+          { billdate_end: "" },
+          { branna: "" },
+          { fixno: "" },
+        ]),
+        pageindex: String(pageIndex),
+        pagesize: String(pageSize),
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success !== "1" || !data.listTask) break;
+
+    allTx.push(...data.listTask);
+    if (allTx.length >= parseInt(data.reccnt)) break;
+    pageIndex++;
+  }
+
+  return allTx;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -187,12 +221,50 @@ Deno.serve(async (req) => {
     }
     console.log(`Saved ${historyData.length} daily snapshots for ${today} (with daily_cuts)`);
 
+    // 6. Sync transactions from Transaction Flow
+    console.log("Fetching transactions...");
+    const allTransactions = await fetchAllTransactions(sessionId);
+    console.log(`Fetched ${allTransactions.length} transactions`);
+
+    const txData = allTransactions.map((t: Record<string, unknown>) => ({
+      fixno: t.fixno as string,
+      bill_no: t.billno as string,
+      bill_date: t.billdate ? new Date((t.billdate as string).replace(" ", "T")).toISOString() : null,
+      transaction_type: (t.balakindna2 as string || "").trim() || null,
+      quantity: parseInt(t.busiqty2 as string) || 0,
+      balance_after: parseInt(t.balaqty as string) || null,
+      customer_name: (t.branna as string) || null,
+      branch_name: (t.fixna as string) || null,
+      creator: (t.creater as string) || null,
+      remark: (t.remark as string) || null,
+      audit_date: t.auditdt ? new Date((t.auditdt as string).replace(" ", "T")).toISOString() : null,
+      raw_data: t,
+    }));
+
+    let txSynced = 0;
+    if (txData.length > 0) {
+      for (let i = 0; i < txData.length; i += 50) {
+        const chunk = txData.slice(i, i + 50);
+        const { error } = await supabase
+          .from("device_transactions")
+          .upsert(chunk, { onConflict: "fixno,bill_no" });
+
+        if (error) {
+          console.error(`Transaction upsert error at chunk ${i}: ${error.message}`);
+        } else {
+          txSynced += chunk.length;
+        }
+      }
+    }
+    console.log(`Synced ${txSynced} transactions`);
+
     return new Response(
       JSON.stringify({
         success: true,
         total_fetched: allDevices.length,
         active_synced: activeDevices.length,
         history_saved: historyData.length,
+        transactions_synced: txSynced,
         timestamp: new Date().toISOString(),
       }),
       {

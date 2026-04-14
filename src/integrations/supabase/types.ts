@@ -41,6 +41,57 @@ export type Database = {
         }
         Relationships: []
       }
+      device_transactions: {
+        Row: {
+          audit_date: string | null
+          balance_after: number | null
+          bill_date: string | null
+          bill_no: string
+          branch_name: string | null
+          created_at: string
+          creator: string | null
+          customer_name: string | null
+          fixno: string
+          id: string
+          quantity: number
+          raw_data: Json | null
+          remark: string | null
+          transaction_type: string | null
+        }
+        Insert: {
+          audit_date?: string | null
+          balance_after?: number | null
+          bill_date?: string | null
+          bill_no: string
+          branch_name?: string | null
+          created_at?: string
+          creator?: string | null
+          customer_name?: string | null
+          fixno: string
+          id?: string
+          quantity?: number
+          raw_data?: Json | null
+          remark?: string | null
+          transaction_type?: string | null
+        }
+        Update: {
+          audit_date?: string | null
+          balance_after?: number | null
+          bill_date?: string | null
+          bill_no?: string
+          branch_name?: string | null
+          created_at?: string
+          creator?: string | null
+          customer_name?: string | null
+          fixno?: string
+          id?: string
+          quantity?: number
+          raw_data?: Json | null
+          remark?: string | null
+          transaction_type?: string | null
+        }
+        Relationships: []
+      }
       devices: {
         Row: {
           address: string | null
