@@ -255,6 +255,77 @@ export default function BranchDetail() {
           )}
         </div>
 
+        {/* Transactions / Reloads History */}
+        <div className="mb-6 rounded-lg border border-border bg-card p-4">
+          <div className="mb-4 flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Historial de recargas
+            </h2>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {transactions.length} transacciones
+            </span>
+          </div>
+          {transactions.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-4">Fecha</th>
+                    <th className="pb-2 pr-4">Tipo</th>
+                    <th className="pb-2 pr-4 text-right">Cantidad</th>
+                    <th className="pb-2 pr-4 text-right">Saldo</th>
+                    <th className="pb-2 pr-4">Nº Factura</th>
+                    <th className="pb-2">Nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="border-b border-border/50 last:border-0">
+                      <td className="py-2 pr-4 whitespace-nowrap">
+                        {tx.bill_date
+                          ? new Date(tx.bill_date).toLocaleDateString("es-CL", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                            tx.transaction_type === "Distribution"
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {tx.transaction_type === "Distribution" ? "Recarga" : tx.transaction_type || "—"}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 text-right font-mono font-semibold text-green-400">
+                        +{tx.quantity.toLocaleString("es-AR")}
+                      </td>
+                      <td className="py-2 pr-4 text-right font-mono text-muted-foreground">
+                        {tx.balance_after?.toLocaleString("es-AR") ?? "—"}
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">
+                        {tx.bill_no}
+                      </td>
+                      <td className="py-2 text-xs text-muted-foreground truncate max-w-[120px]">
+                        {tx.remark || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex h-[100px] items-center justify-center text-sm text-muted-foreground">
+              Sin transacciones registradas. Se sincronizarán automáticamente.
+            </div>
+          )}
+        </div>
+
         {/* Contact */}
         {(device.contact_name || device.contact_phone) && (
           <div className="mb-6 rounded-lg border border-border bg-card p-4">
