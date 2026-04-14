@@ -542,14 +542,14 @@ function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: str
 function SalesForm({
   clients,
   defaultClient,
-  branches,
+  devices,
   onSubmit,
   loading,
 }: {
   clients: string[];
   defaultClient: string;
-  branches: string[];
-  onSubmit: (data: { customer_name: string; period: string; units_sold: number; branch_name?: string; notes?: string }) => void;
+  devices: { customer_name: string | null; branch_name: string | null; fixno: string }[];
+  onSubmit: (data: { customer_name: string; period: string; units_sold: number; branch_name: string; notes?: string }) => void;
   loading: boolean;
 }) {
   const now = new Date();
@@ -561,7 +561,20 @@ function SalesForm({
   const [branch, setBranch] = useState("");
   const [notes, setNotes] = useState("");
 
-  const uniqueBranches = useMemo(() => Array.from(new Set(branches)).sort(), [branches]);
+  // Filter branches by selected client, exclude stock devices (branch_name === fixno or empty)
+  const clientBranches = useMemo(() => {
+    if (!client) return [];
+    const branches = devices
+      .filter(d => d.customer_name === client && d.branch_name && d.branch_name !== d.fixno)
+      .map(d => d.branch_name!);
+    return Array.from(new Set(branches)).sort();
+  }, [devices, client]);
+
+  // Reset branch when client changes
+  const handleClientChange = (newClient: string) => {
+    setClient(newClient);
+    setBranch("");
+  };
 
   return (
     <div className="mb-6 rounded-lg border bg-card p-5">
@@ -573,7 +586,7 @@ function SalesForm({
           <label className="mb-1 block text-xs text-muted-foreground">Cliente *</label>
           <select
             value={client}
-            onChange={e => setClient(e.target.value)}
+            onChange={e => handleClientChange(e.target.value)}
             className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="">Seleccionar...</option>
@@ -590,6 +603,18 @@ function SalesForm({
           />
         </div>
         <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Sucursal *</label>
+          <select
+            value={branch}
+            onChange={e => setBranch(e.target.value)}
+            disabled={!client}
+            className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+          >
+            <option value="">{client ? "Seleccionar sucursal..." : "Primero seleccioná un cliente"}</option>
+            {clientBranches.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+        <div>
           <label className="mb-1 block text-xs text-muted-foreground">Equipos vendidos *</label>
           <input
             type="number"
@@ -599,22 +624,6 @@ function SalesForm({
             placeholder="0"
             className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-muted-foreground">Sucursal (opcional)</label>
-          <div className="relative">
-            <input
-              type="text"
-              list="branch-options"
-              value={branch}
-              onChange={e => setBranch(e.target.value)}
-              placeholder="Consolidado (todas)"
-              className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <datalist id="branch-options">
-              {uniqueBranches.map(b => <option key={b} value={b} />)}
-            </datalist>
-          </div>
         </div>
       </div>
       <div className="mt-3">
@@ -628,13 +637,13 @@ function SalesForm({
         />
       </div>
       <button
-        disabled={!client || !period || !units || loading}
+        disabled={!client || !period || !branch || !units || loading}
         onClick={() => {
           onSubmit({
             customer_name: client,
             period,
             units_sold: parseInt(units),
-            branch_name: branch || undefined,
+            branch_name: branch,
             notes: notes || undefined,
           });
           setUnits("");
