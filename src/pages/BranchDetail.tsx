@@ -4,7 +4,7 @@ import {
   ArrowLeft, Scissors, Wifi, WifiOff,
   Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw
 } from "lucide-react";
-import { useDevice, isOnline } from "@/hooks/useDevices";
+import { useDevice, isOnline, useLastCutDates, getDeviceState, DEVICE_STATE_LABELS } from "@/hooks/useDevices";
 import { useCutsHistory } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
