@@ -83,14 +83,12 @@ export default function DeviceEmails() {
 
   async function handleToggleAlerts(deviceId: string, enabled: boolean) {
     try {
-      const updateData: Record<string, any> = { alerts_enabled: enabled };
-      // When re-enabling, reset the 2-week window
-      if (enabled) {
-        updateData.first_alert_sent_at = null;
-      }
       const { error } = await supabase
         .from("devices")
-        .update(updateData)
+        .update({
+          alerts_enabled: enabled,
+          first_alert_sent_at: enabled ? null : undefined,
+        })
         .eq("id", deviceId);
       if (error) throw error;
       toast.success(enabled ? "Alertas activadas" : "Alertas desactivadas");
