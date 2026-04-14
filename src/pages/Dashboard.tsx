@@ -1,8 +1,8 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
 import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,12 +19,25 @@ function formatSyncDate(dateStr: string | null) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
-  const [alertsOnly, setAlertsOnly] = useState(false);
-  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize state from URL params
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [clientFilter, setClientFilter] = useState<ClientFilter>(() => searchParams.get("client") || "all");
+  const [alertsOnly, setAlertsOnly] = useState(() => searchParams.get("alerts") === "1");
+  const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
+
+  // Sync state to URL params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (clientFilter !== "all") params.set("client", clientFilter);
+    if (alertsOnly) params.set("alerts", "1");
+    if (stateFilter !== "all") params.set("state", stateFilter);
+    setSearchParams(params, { replace: true });
+  }, [search, clientFilter, alertsOnly, stateFilter, setSearchParams]);
   const { data: devices = [], isLoading, refetch } = useDevices();
   const { data: lastCutDates } = useLastCutDates();
   const { data: avgDailyCuts } = useAvgDailyCuts();
