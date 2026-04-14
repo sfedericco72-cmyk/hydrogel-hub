@@ -5,7 +5,7 @@ import {
 import type { TemplateEntry } from './registry.ts'
 
 const SITE_NAME = "Bitec Hydrogel Hub"
-const LOGO_URL = "https://bitec.cl/wp-content/uploads/2024/10/logo-bitec.svg"
+const LOGO_URL = "https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png"
 
 interface DesconectadoProps {
   branchName?: string
