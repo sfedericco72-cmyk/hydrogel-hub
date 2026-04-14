@@ -19,6 +19,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/sucursal/:id" element={<BranchDetail />} />
+          <Route path="/emails" element={<DeviceEmails />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
