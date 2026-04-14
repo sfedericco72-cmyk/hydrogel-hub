@@ -1,24 +1,26 @@
-import { Device, getDeviceState, getDaysOfStock, hasLowStock, DEVICE_STATE_LABELS, type DeviceState } from "@/hooks/useDevices";
-import { StatusBadge } from "./StatusBadge";
-import { Scissors, ChevronRight, Package, AlertTriangle } from "lucide-react";
+import { Device, getDeviceState, getDaysOfStock, hasLowStock, DEVICE_STATE_LABELS, type DeviceState, useMonthlyCutsMap, getConnectionLevel } from "@/hooks/useDevices";
+import { CutsTrafficLights, ConnectionTrafficLight } from "./TrafficLights";
+import { Scissors, ChevronRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { StatusBadge } from "./StatusBadge";
 
 const stateStatusMap: Record<DeviceState, "online" | "offline" | "warning"> = {
   stock: "warning",
   active: "online",
-  disconnected: "warning",
-  inactive: "offline",
+  disconnected: "offline",
 };
 
-export function DeviceCard({ device, lastCutDates, avgDailyCuts }: {
+export function DeviceCard({ device, lastCutDates, avgDailyCuts, monthlyCutsMap }: {
   device: Device;
   lastCutDates?: Map<string, string>;
   avgDailyCuts?: Map<string, number>;
+  monthlyCutsMap?: Map<string, Map<string, number>>;
 }) {
   const navigate = useNavigate();
   const deviceState = getDeviceState(device, lastCutDates);
   const lowStock = hasLowStock(device, avgDailyCuts);
   const daysOfStock = getDaysOfStock(device, avgDailyCuts);
+  const deviceMonthlyCuts = monthlyCutsMap?.get(device.fixno);
 
   return (
     <div
@@ -35,7 +37,13 @@ export function DeviceCard({ device, lastCutDates, avgDailyCuts }: {
         <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      {/* Traffic lights row */}
+      <div className="mt-3 flex items-start gap-6 border-t border-border pt-3">
+        <CutsTrafficLights monthlyCuts={deviceMonthlyCuts} />
+        <ConnectionTrafficLight latestOnlineTime={device.latest_online_time} />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
         <StatusBadge
           status={stateStatusMap[deviceState]}
           label={DEVICE_STATE_LABELS[deviceState]}
