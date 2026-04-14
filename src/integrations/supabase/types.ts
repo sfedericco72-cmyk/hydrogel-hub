@@ -44,6 +44,7 @@ export type Database = {
       devices: {
         Row: {
           address: string | null
+          alert_email: string | null
           branch_name: string | null
           city: string | null
           contact_name: string | null
@@ -65,6 +66,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          alert_email?: string | null
           branch_name?: string | null
           city?: string | null
           contact_name?: string | null
@@ -86,6 +88,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          alert_email?: string | null
           branch_name?: string | null
           city?: string | null
           contact_name?: string | null
