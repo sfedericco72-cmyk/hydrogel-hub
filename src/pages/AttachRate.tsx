@@ -393,7 +393,7 @@ export default function AttachRate() {
                           <td className="py-2 pr-4">
                             <div className="flex items-center gap-2">
                               <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              <span className="font-medium truncate">{b.branchName}</span>
+                              <span className="font-medium truncate">{titleCase(b.branchName)}</span>
                             </div>
                           </td>
                           <td className="py-2 px-2 text-right tabular-nums">{b.totalCuts.toLocaleString("es-AR")}</td>
@@ -448,8 +448,8 @@ export default function AttachRate() {
                 <div key={s.id} className="flex items-center justify-between rounded-md bg-secondary/50 px-3 py-2">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-medium text-muted-foreground">{formatMonth(s.period)}</span>
-                    <span className="text-sm font-medium">{s.customer_name}</span>
-                    {s.branch_name && <span className="text-xs text-muted-foreground">· {s.branch_name}</span>}
+                    <span className="text-sm font-medium">{titleCase(s.customer_name)}</span>
+                    {s.branch_name && <span className="text-xs text-muted-foreground">· {titleCase(s.branch_name)}</span>}
                     <span className="text-sm tabular-nums font-semibold text-emerald-400">{s.units_sold}</span>
                     <span className="text-xs text-muted-foreground">equipos</span>
                   </div>
