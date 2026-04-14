@@ -310,7 +310,7 @@ export default function AttachRate() {
                       </div>
                       <span className="text-[10px] text-muted-foreground">{formatMonth(d.month)}</span>
                       {d.rate !== null && (
-                        <span className={`text-[10px] font-semibold tabular-nums ${rateColorClass(d.rate)}`}>
+                        <span className={`text-[10px] font-semibold tabular-nums ${rateColorClass(d.rate, arGreen, arYellow)}`}>
                           {d.rate.toFixed(0)}%
                         </span>
                       )}
@@ -348,7 +348,7 @@ export default function AttachRate() {
                       </td>
                       <td className="py-2 px-2 text-right">
                         {d.rate !== null ? (
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate)}`}>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate, arGreen, arYellow)}`}>
                             {d.rate.toFixed(1)}%
                           </span>
                         ) : <span className="text-muted-foreground/50">—</span>}
@@ -407,7 +407,7 @@ export default function AttachRate() {
                           </td>
                           <td className="py-2 px-2 text-right">
                             {b.avgRate !== null ? (
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(b.avgRate)}`}>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(b.avgRate, arGreen, arYellow)}`}>
                                 {b.avgRate.toFixed(1)}%
                               </span>
                             ) : <span className="text-muted-foreground/50">—</span>}
@@ -499,7 +499,7 @@ function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <span className="font-semibold">{titleCase(branchName)}</span>
           {avgRate !== null && (
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(avgRate)}`}>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(avgRate, arGreen, arYellow)}`}>
               {avgRate.toFixed(1)}%
             </span>
           )}
@@ -527,7 +527,7 @@ function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
                   </td>
                   <td className="py-2 px-2 text-right">
                     {d.rate !== null ? (
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate)}`}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate, arGreen, arYellow)}`}>
                         {d.rate.toFixed(1)}%
                       </span>
                     ) : <span className="text-muted-foreground/50">—</span>}
