@@ -59,6 +59,61 @@ export function useLastCutDates() {
   });
 }
 
+/** Map of fixno → average daily cuts (last 30 days with cuts > 0) */
+export function useAvgDailyCuts() {
+  return useQuery({
+    queryKey: ["avg-daily-cuts"],
+    queryFn: async () => {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const dateStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+      const { data, error } = await supabase
+        .from("device_cuts_history")
+        .select("fixno, daily_cuts")
+        .gt("daily_cuts", 0)
+        .gte("cut_date", dateStr);
+
+      if (error) throw error;
+
+      const sums = new Map<string, { total: number; days: number }>();
+      data?.forEach((r) => {
+        const entry = sums.get(r.fixno) || { total: 0, days: 0 };
+        entry.total += r.daily_cuts!;
+        entry.days += 1;
+        sums.set(r.fixno, entry);
+      });
+
+      const avgMap = new Map<string, number>();
+      sums.forEach((v, k) => avgMap.set(k, v.total / v.days));
+      return avgMap;
+    },
+  });
+}
+
+const LOW_STOCK_DAYS = 7;
+
+/** Calculate estimated days of stock remaining */
+export function getDaysOfStock(
+  device: Device,
+  avgDailyCuts: Map<string, number> | undefined
+): number | null {
+  if (!avgDailyCuts) return null;
+  const avg = avgDailyCuts.get(device.fixno);
+  if (!avg || avg <= 0) return null;
+  return (device.remaining_cuts ?? 0) / avg;
+}
+
+/** Check if device has low stock (< 7 days of estimated usage) */
+export function hasLowStock(
+  device: Device,
+  avgDailyCuts: Map<string, number> | undefined
+): boolean {
+  const days = getDaysOfStock(device, avgDailyCuts);
+  if (days === null) return (device.remaining_cuts ?? 0) <= 10; // fallback if no history
+  return days < LOW_STOCK_DAYS;
+}
+
 export type DeviceState = "stock" | "active" | "disconnected" | "inactive";
 
 /** Check if device is "en stock" (no name or name equals fixno) */
@@ -113,14 +168,16 @@ export function isOnline(device: Device): boolean {
   if (!device.latest_online_time) return false;
   const lastOnline = new Date(device.latest_online_time);
   const tenMinutesAgo = new Date();
-  tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 60); // consider online if seen in last hour
+  tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 60);
   return lastOnline >= tenMinutesAgo;
 }
 
-export function hasAlert(device: Device): boolean {
+export function hasAlert(
+  device: Device,
+  avgDailyCuts?: Map<string, number>
+): boolean {
   return (
     device.status !== "enabled" ||
-    !isOnline(device) ||
-    (device.remaining_cuts ?? 0) <= 10
+    hasLowStock(device, avgDailyCuts)
   );
 }

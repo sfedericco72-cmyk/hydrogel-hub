@@ -1,8 +1,8 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, Wifi, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive } from "lucide-react";
+import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useDevices, isOnline, hasAlert, useLastCutDates, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -25,9 +25,9 @@ export default function Dashboard() {
   const [clientsExpanded, setClientsExpanded] = useState(true);
   const { data: devices = [], isLoading, refetch } = useDevices();
   const { data: lastCutDates } = useLastCutDates();
+  const { data: avgDailyCuts } = useAvgDailyCuts();
 
-  const onlineCount = devices.filter(isOnline).length;
-  const alertCount = devices.filter(hasAlert).length;
+  const alertCount = devices.filter(d => hasAlert(d, avgDailyCuts)).length;
   const lastSyncDate = useMemo(() => {
     if (devices.length === 0) return null;
     return devices.reduce((latest, d) =>
@@ -47,7 +47,7 @@ export default function Dashboard() {
     scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
-  const scopedAlertCount = scopedDevices.filter(hasAlert).length;
+  const scopedAlertCount = scopedDevices.filter(d => hasAlert(d, avgDailyCuts)).length;
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -62,7 +62,7 @@ export default function Dashboard() {
 
   const filtered = scopedDevices
     .filter(d => {
-      if (alertsOnly && !hasAlert(d)) return false;
+      if (alertsOnly && !hasAlert(d, avgDailyCuts)) return false;
       if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
       return true;
     })
@@ -121,10 +121,9 @@ export default function Dashboard() {
           </button>
         </div>
 
-        <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
           <StatCard title="Dispositivos" value={devices.length} icon={Building2} variant="primary" />
           <StatCard title="Cortes totales" value={devices.reduce((s, d) => s + (d.total_cuts ?? 0), 0).toLocaleString("es-AR")} icon={Scissors} variant="success" subtitle="Todos los dispositivos" />
-          <StatCard title="Online" value={`${onlineCount}/${devices.length}`} icon={Wifi} variant="success" />
           <StatCard title="Alertas" value={alertCount} icon={AlertTriangle} variant={alertCount > 0 ? "danger" : "default"} />
         </div>
 
@@ -223,7 +222,7 @@ export default function Dashboard() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {clientDevs.map(device => (
-                    <DeviceCard key={device.id} device={device} lastCutDates={lastCutDates} />
+                    <DeviceCard key={device.id} device={device} lastCutDates={lastCutDates} avgDailyCuts={avgDailyCuts} />
                   ))}
                 </div>
               </div>

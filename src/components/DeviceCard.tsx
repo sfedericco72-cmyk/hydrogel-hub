@@ -1,12 +1,7 @@
-import { Device, isOnline, getDeviceState, DEVICE_STATE_LABELS, type DeviceState } from "@/hooks/useDevices";
+import { Device, getDeviceState, getDaysOfStock, hasLowStock, DEVICE_STATE_LABELS, type DeviceState } from "@/hooks/useDevices";
 import { StatusBadge } from "./StatusBadge";
-import { Scissors, Wifi, WifiOff, ChevronRight, Package } from "lucide-react";
+import { Scissors, ChevronRight, Package, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
-}
 
 const stateStatusMap: Record<DeviceState, "online" | "offline" | "warning"> = {
   stock: "warning",
@@ -15,11 +10,15 @@ const stateStatusMap: Record<DeviceState, "online" | "offline" | "warning"> = {
   inactive: "offline",
 };
 
-export function DeviceCard({ device, lastCutDates }: { device: Device; lastCutDates?: Map<string, string> }) {
+export function DeviceCard({ device, lastCutDates, avgDailyCuts }: {
+  device: Device;
+  lastCutDates?: Map<string, string>;
+  avgDailyCuts?: Map<string, number>;
+}) {
   const navigate = useNavigate();
-  const online = isOnline(device);
-  const lowCuts = (device.remaining_cuts ?? 0) <= 10;
   const deviceState = getDeviceState(device, lastCutDates);
+  const lowStock = hasLowStock(device, avgDailyCuts);
+  const daysOfStock = getDaysOfStock(device, avgDailyCuts);
 
   return (
     <div
@@ -42,17 +41,16 @@ export function DeviceCard({ device, lastCutDates }: { device: Device; lastCutDa
           label={DEVICE_STATE_LABELS[deviceState]}
           pulse={deviceState === "active"}
         />
-        <StatusBadge
-          status={online ? "online" : "offline"}
-          label={online ? "Online" : "Offline"}
-          pulse={online}
-        />
-        {lowCuts && (
-          <StatusBadge status="warning" label="Cortes bajos" />
+        {lowStock && (
+          <StatusBadge status="warning" label={
+            daysOfStock !== null
+              ? `~${Math.round(daysOfStock)}d stock`
+              : "Stock bajo"
+          } />
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-border pt-3">
+      <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Scissors className="h-3.5 w-3.5" />
           <span className="font-mono font-medium text-foreground">{(device.total_cuts ?? 0).toLocaleString("es-AR")}</span>
@@ -61,10 +59,6 @@ export function DeviceCard({ device, lastCutDates }: { device: Device; lastCutDa
           <Package className="h-3.5 w-3.5" />
           <span className="font-mono font-medium text-foreground">{device.remaining_cuts ?? 0}</span>
           <span>rest.</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {online ? <Wifi className="h-3.5 w-3.5 text-status-online" /> : <WifiOff className="h-3.5 w-3.5 text-status-offline" />}
-          <span className="truncate">{formatDate(device.latest_online_time)}</span>
         </div>
       </div>
     </div>
