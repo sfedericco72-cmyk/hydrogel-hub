@@ -126,7 +126,7 @@ export default function DeviceEmails() {
         <div className="mb-4 flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             <FilterBtn active={stateFilter === "all"} onClick={() => setStateFilter("all")}>
-              Todos ({nonStockDevices.length})
+              Todos ({scopedDevices.length})
             </FilterBtn>
             <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
               <Activity className="mr-1 inline h-3.5 w-3.5" />
