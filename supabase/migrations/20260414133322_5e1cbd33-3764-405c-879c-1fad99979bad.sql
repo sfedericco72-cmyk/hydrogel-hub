@@ -1,0 +1,1 @@
+CREATE POLICY "Anyone can update alert_email" ON public.devices FOR UPDATE USING (true) WITH CHECK (true);
