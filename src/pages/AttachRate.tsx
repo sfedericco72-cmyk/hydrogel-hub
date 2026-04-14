@@ -370,15 +370,23 @@ export default function AttachRate() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground">Sucursal</th>
-                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Láminas</th>
-                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Equipos</th>
-                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Attach Rate</th>
+                        <SortHeader col="branch" current={rankSort} onSort={setRankSort} align="left">Sucursal</SortHeader>
+                        <SortHeader col="cuts" current={rankSort} onSort={setRankSort}>Láminas</SortHeader>
+                        <SortHeader col="sold" current={rankSort} onSort={setRankSort}>Equipos</SortHeader>
+                        <SortHeader col="rate" current={rankSort} onSort={setRankSort}>Attach Rate</SortHeader>
                       </tr>
                     </thead>
                     <tbody>
                       {[...branchSummaries]
-                        .sort((a, b) => (b.avgRate ?? -1) - (a.avgRate ?? -1))
+                        .sort((a, b) => {
+                          const dir = rankSort.dir === "asc" ? 1 : -1;
+                          switch (rankSort.col) {
+                            case "branch": return dir * a.branchName.localeCompare(b.branchName);
+                            case "cuts": return dir * (a.totalCuts - b.totalCuts);
+                            case "sold": return dir * (a.totalSold - b.totalSold);
+                            case "rate": return dir * ((a.avgRate ?? -1) - (b.avgRate ?? -1));
+                          }
+                        })
                         .map(b => (
                         <tr key={b.branchName} className="border-b border-border/50 last:border-0">
                           <td className="py-2 pr-4">
