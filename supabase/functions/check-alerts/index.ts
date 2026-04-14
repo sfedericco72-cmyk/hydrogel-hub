@@ -25,6 +25,20 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+  // Load configurable thresholds from tenant_settings
+  const { data: tenantSettings } = await supabase
+    .from('tenant_settings')
+    .select('bcc_email, low_stock_days, alert_cooldown_days, alert_max_window_days')
+    .eq('tenant_name', 'default')
+    .single()
+
+  if (tenantSettings) {
+    if (tenantSettings.bcc_email) BCC_EMAIL = tenantSettings.bcc_email
+    LOW_STOCK_DAYS_THRESHOLD = tenantSettings.low_stock_days ?? LOW_STOCK_DAYS_THRESHOLD
+    ALERT_COOLDOWN_DAYS = tenantSettings.alert_cooldown_days ?? ALERT_COOLDOWN_DAYS
+    ALERT_MAX_WINDOW_DAYS = tenantSettings.alert_max_window_days ?? ALERT_MAX_WINDOW_DAYS
+  }
+
   const { data: devices, error: devErr } = await supabase
     .from('devices')
     .select('id, fixno, branch_name, customer_name, remaining_cuts, latest_online_time, alert_email, status, alerts_enabled, first_alert_sent_at')
