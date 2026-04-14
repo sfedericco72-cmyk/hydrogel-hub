@@ -1,9 +1,11 @@
 import { useState, useMemo } from "react";
-import { useDevices, useLastCutDates, getDeviceState, DEVICE_STATE_LABELS, type DeviceState } from "@/hooks/useDevices";
+import { useDevices, useLastCutDates, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Mail, Save, Check, Activity, WifiOff, Package, Users, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Mail, Save, Check, Activity, WifiOff, Users, ChevronDown, ChevronRight, History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { useQuery } from "@tanstack/react-query";
 
 type ClientFilter = "all" | string;
 type StateFilter = "all" | DeviceState;
@@ -18,13 +20,12 @@ export default function DeviceEmails() {
   const [stateFilter, setStateFilter] = useState<StateFilter>("active");
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   const [clientsExpanded, setClientsExpanded] = useState(false);
+  const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
 
   const nonStockDevices = devices.filter(
     (d) => d.branch_name && d.branch_name !== d.fixno
   );
 
-  // Apply filters
-  // Scope by client first (same as Dashboard)
   const scopedDevices = useMemo(() => {
     if (clientFilter === "all") return nonStockDevices;
     return nonStockDevices.filter((d) => (d.customer_name || "Sin cliente") === clientFilter);
@@ -80,7 +81,25 @@ export default function DeviceEmails() {
     }
   }
 
-  // Group by customer
+  async function handleToggleAlerts(deviceId: string, enabled: boolean) {
+    try {
+      const updateData: Record<string, any> = { alerts_enabled: enabled };
+      // When re-enabling, reset the 2-week window
+      if (enabled) {
+        updateData.first_alert_sent_at = null;
+      }
+      const { error } = await supabase
+        .from("devices")
+        .update(updateData)
+        .eq("id", deviceId);
+      if (error) throw error;
+      toast.success(enabled ? "Alertas activadas" : "Alertas desactivadas");
+      refetch();
+    } catch (e: any) {
+      toast.error("Error: " + e.message);
+    }
+  }
+
   const grouped = filtered.reduce<Record<string, typeof filtered>>(
     (acc, d) => {
       const key = d.customer_name || "Sin cliente";
@@ -117,8 +136,7 @@ export default function DeviceEmails() {
             </h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Configurá el email de cada dispositivo para recibir alertas de stock
-            bajo y desconexión.
+            Configurá el email y activá/desactivá alertas por equipo. Las alertas se envían 1 vez por semana durante 2 semanas.
           </p>
         </div>
 
@@ -201,44 +219,73 @@ export default function DeviceEmails() {
                     const isDirty =
                       editedEmails[device.id] !== undefined &&
                       editedEmails[device.id] !== (device.alert_email ?? "");
+                    const alertsEnabled = (device as any).alerts_enabled !== false;
+                    const isExpanded = expandedDevice === device.id;
+
                     return (
                       <div
                         key={device.id}
-                        className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:gap-3"
+                        className="rounded-lg border border-border bg-card"
                       >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
-                            {device.branch_name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {device.fixno}
-                          </p>
+                        <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {device.branch_name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {device.fixno}
+                            </p>
+                          </div>
+
+                          {/* Alerts toggle */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-xs ${alertsEnabled ? "text-green-400" : "text-muted-foreground"}`}>
+                              {alertsEnabled ? "Alertas on" : "Alertas off"}
+                            </span>
+                            <Switch
+                              checked={alertsEnabled}
+                              onCheckedChange={(checked) => handleToggleAlerts(device.id, checked)}
+                            />
+                          </div>
+
+                          <div className="flex flex-1 items-center gap-2">
+                            <input
+                              type="email"
+                              placeholder="email@ejemplo.com"
+                              value={email}
+                              onChange={(e) =>
+                                setEditedEmails((p) => ({
+                                  ...p,
+                                  [device.id]: e.target.value,
+                                }))
+                              }
+                              className="w-full rounded-md border border-input bg-secondary px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                            <button
+                              onClick={() => handleSave(device.id)}
+                              disabled={!isDirty || saving[device.id]}
+                              className="flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+                            >
+                              {saved[device.id] ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <Save className="h-4 w-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setExpandedDevice(isExpanded ? null : device.id)}
+                              className="flex shrink-0 items-center rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                              title="Ver historial de alertas"
+                            >
+                              <History className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex flex-1 items-center gap-2">
-                          <input
-                            type="email"
-                            placeholder="email@ejemplo.com"
-                            value={email}
-                            onChange={(e) =>
-                              setEditedEmails((p) => ({
-                                ...p,
-                                [device.id]: e.target.value,
-                              }))
-                            }
-                            className="w-full rounded-md border border-input bg-secondary px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                          <button
-                            onClick={() => handleSave(device.id)}
-                            disabled={!isDirty || saving[device.id]}
-                            className="flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
-                          >
-                            {saved[device.id] ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Save className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+
+                        {/* Email history */}
+                        {isExpanded && (
+                          <DeviceEmailHistory fixno={device.fixno} alertEmail={device.alert_email} />
+                        )}
                       </div>
                     );
                   })}
@@ -248,6 +295,69 @@ export default function DeviceEmails() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function DeviceEmailHistory({ fixno, alertEmail }: { fixno: string; alertEmail: string | null }) {
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ["email-history", fixno],
+    queryFn: async () => {
+      // Search by idempotency key pattern which contains the fixno
+      const { data, error } = await supabase
+        .from("email_send_log")
+        .select("id, template_name, recipient_email, status, created_at, message_id")
+        .or(`message_id.like.%${fixno}%`)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      // Deduplicate by message_id, keep latest
+      const seen = new Set<string>();
+      return (data || []).filter((row) => {
+        if (!row.message_id || seen.has(row.message_id)) return false;
+        seen.add(row.message_id);
+        return true;
+      });
+    },
+    staleTime: 30_000,
+  });
+
+  const templateLabels: Record<string, string> = {
+    "stock-bajo": "Stock bajo",
+    "dispositivo-desconectado": "Desconectado",
+    "email-no-configurado": "Sin email configurado",
+  };
+
+  const statusColors: Record<string, string> = {
+    sent: "text-green-400",
+    pending: "text-yellow-400",
+    dlq: "text-red-400",
+    failed: "text-red-400",
+  };
+
+  return (
+    <div className="border-t border-border px-3 pb-3 pt-2">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">Últimas alertas enviadas</p>
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Cargando...</p>
+      ) : !logs?.length ? (
+        <p className="text-xs text-muted-foreground">No hay alertas enviadas para este equipo</p>
+      ) : (
+        <div className="space-y-1">
+          {logs.map((log) => (
+            <div key={log.id} className="flex items-center gap-3 text-xs">
+              <span className="shrink-0 text-muted-foreground">
+                {new Date(log.created_at).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+              <span className="truncate">{templateLabels[log.template_name] || log.template_name}</span>
+              <span className={`shrink-0 font-medium ${statusColors[log.status] || "text-muted-foreground"}`}>
+                {log.status}
+              </span>
+              <span className="truncate text-muted-foreground">{log.recipient_email}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
