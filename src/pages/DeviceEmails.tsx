@@ -29,7 +29,7 @@ export default function DeviceEmails() {
 
   const scopedDevices = useMemo(() => {
     if (clientFilter === "all") return nonStockDevices;
-    return nonStockDevices.filter((d) => (d.customer_name || "Sin cliente") === clientFilter);
+    return nonStockDevices.filter((d) => (titleCase(d.customer_name) || "Sin cliente") === clientFilter);
   }, [nonStockDevices, clientFilter]);
 
   const filtered = useMemo(() => {
