@@ -26,7 +26,6 @@ export default function Dashboard() {
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [clientFilter, setClientFilter] = useState<ClientFilter>(() => searchParams.get("client") || "all");
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
-  const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
 
@@ -62,7 +61,7 @@ export default function Dashboard() {
     scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
-  const scopedAlertCount = scopedDevices.filter(d => hasAlert(d, avgDailyCuts)).length;
+  
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -75,7 +74,6 @@ export default function Dashboard() {
 
   const filtered = scopedDevices
     .filter(d => {
-      if (alertsOnly && !hasAlert(d, avgDailyCuts)) return false;
       if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
       return true;
     })
@@ -151,7 +149,7 @@ export default function Dashboard() {
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={stateFilter === "all" && !alertsOnly} onClick={() => { setStateFilter("all"); setAlertsOnly(false); }}>
+              <FilterBtn active={stateFilter === "all"} onClick={() => setStateFilter("all")}>
                 Todos ({scopedDevices.length})
               </FilterBtn>
               <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
@@ -165,9 +163,6 @@ export default function Dashboard() {
               <FilterBtn active={stateFilter === "stock"} onClick={() => toggleStateFilter("stock")}>
                 <Package className="mr-1 inline h-3.5 w-3.5" />
                 En stock ({stateCounts.stock})
-              </FilterBtn>
-              <FilterBtn active={alertsOnly} onClick={() => setAlertsOnly(prev => !prev)} danger>
-                Alertas ({scopedAlertCount})
               </FilterBtn>
             </div>
 
