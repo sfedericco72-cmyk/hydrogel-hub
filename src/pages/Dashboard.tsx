@@ -141,8 +141,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-[auto_1fr]">
-          <StatCard title="Dispositivos" value={devices.length} icon={Building2} variant="primary" />
+        <div className="mb-8">
           <MonthlyTimeline devices={devices} monthlyCutsMap={monthlyCutsMap} />
         </div>
 
