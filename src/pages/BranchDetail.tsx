@@ -130,7 +130,7 @@ export default function BranchDetail() {
     <div className="min-h-screen p-4 md:p-8">
       <div className="mx-auto max-w-4xl">
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate(-1)}
           className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
