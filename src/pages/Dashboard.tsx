@@ -1,7 +1,8 @@
 import { StatCard } from "@/components/StatCard";
+import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,7 +25,6 @@ export default function Dashboard() {
   // Initialize state from URL params
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [clientFilter, setClientFilter] = useState<ClientFilter>(() => searchParams.get("client") || "all");
-  const [alertsOnly, setAlertsOnly] = useState(() => searchParams.get("alerts") === "1");
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
@@ -34,16 +34,15 @@ export default function Dashboard() {
     const params = new URLSearchParams();
     if (search) params.set("q", search);
     if (clientFilter !== "all") params.set("client", clientFilter);
-    if (alertsOnly) params.set("alerts", "1");
     if (stateFilter !== "all") params.set("state", stateFilter);
     setSearchParams(params, { replace: true });
-  }, [search, clientFilter, alertsOnly, stateFilter, setSearchParams]);
+    setSearchParams(params, { replace: true });
+  }, [search, clientFilter, stateFilter, setSearchParams]);
   const { data: devices = [], isLoading, refetch } = useDevices();
   const { data: lastCutDates } = useLastCutDates();
   const { data: avgDailyCuts } = useAvgDailyCuts();
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
 
-  const alertCount = devices.filter(d => hasAlert(d, avgDailyCuts)).length;
   const lastSyncDate = useMemo(() => {
     if (devices.length === 0) return null;
     return devices.reduce((latest, d) =>
@@ -62,7 +61,7 @@ export default function Dashboard() {
     scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
-  const scopedAlertCount = scopedDevices.filter(d => hasAlert(d, avgDailyCuts)).length;
+  
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -75,7 +74,6 @@ export default function Dashboard() {
 
   const filtered = scopedDevices
     .filter(d => {
-      if (alertsOnly && !hasAlert(d, avgDailyCuts)) return false;
       if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
       return true;
     })
@@ -143,16 +141,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-[auto_1fr]">
           <StatCard title="Dispositivos" value={devices.length} icon={Building2} variant="primary" />
-          <StatCard title="Cortes totales" value={devices.reduce((s, d) => s + (d.total_cuts ?? 0), 0).toLocaleString("es-AR")} icon={Scissors} variant="success" subtitle="Todos los dispositivos" />
-          <StatCard title="Alertas" value={alertCount} icon={AlertTriangle} variant={alertCount > 0 ? "danger" : "default"} />
+          <MonthlyTimeline devices={devices} monthlyCutsMap={monthlyCutsMap} />
         </div>
 
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap gap-2">
-              <FilterBtn active={stateFilter === "all" && !alertsOnly} onClick={() => { setStateFilter("all"); setAlertsOnly(false); }}>
+              <FilterBtn active={stateFilter === "all"} onClick={() => setStateFilter("all")}>
                 Todos ({scopedDevices.length})
               </FilterBtn>
               <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
@@ -166,9 +163,6 @@ export default function Dashboard() {
               <FilterBtn active={stateFilter === "stock"} onClick={() => toggleStateFilter("stock")}>
                 <Package className="mr-1 inline h-3.5 w-3.5" />
                 En stock ({stateCounts.stock})
-              </FilterBtn>
-              <FilterBtn active={alertsOnly} onClick={() => setAlertsOnly(prev => !prev)} danger>
-                Alertas ({scopedAlertCount})
               </FilterBtn>
             </div>
 

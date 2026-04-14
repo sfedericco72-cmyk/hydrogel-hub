@@ -95,14 +95,14 @@ export function useAvgDailyCuts() {
  * Map of fixno → Map<"YYYY-MM", totalCuts>
  * Fetches last 3 months of cuts data for all devices.
  */
-export function useMonthlyCutsMap() {
+export function useMonthlyCutsMap(months = 6) {
   return useQuery({
-    queryKey: ["monthly-cuts-map"],
+    queryKey: ["monthly-cuts-map", months],
     queryFn: async () => {
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      threeMonthsAgo.setDate(1);
-      const dateStr = threeMonthsAgo.toISOString().split("T")[0];
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - months);
+      startDate.setDate(1);
+      const dateStr = startDate.toISOString().split("T")[0];
 
       const { data, error } = await supabase
         .from("device_cuts_history")
