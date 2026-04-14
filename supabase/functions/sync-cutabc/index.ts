@@ -78,7 +78,41 @@ async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
   return allDevices;
 }
 
-// No longer filtering — sync ALL devices
+async function fetchAllTransactions(sessionId: string): Promise<Record<string, unknown>[]> {
+  const allTx: Record<string, unknown>[] = [];
+  let pageIndex = 1;
+  const pageSize = 100;
+
+  while (true) {
+    const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        sessionId: sessionId,
+      },
+      body: new URLSearchParams({
+        itemno: "custbalaqry",
+        data: JSON.stringify([
+          { billdate_beg: "" },
+          { billdate_end: "" },
+          { branna: "" },
+          { fixno: "" },
+        ]),
+        pageindex: String(pageIndex),
+        pagesize: String(pageSize),
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success !== "1" || !data.listTask) break;
+
+    allTx.push(...data.listTask);
+    if (allTx.length >= parseInt(data.reccnt)) break;
+    pageIndex++;
+  }
+
+  return allTx;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
