@@ -41,12 +41,11 @@ export function DeviceCard({ device, lastCutDates, avgDailyCuts }: {
           label={DEVICE_STATE_LABELS[deviceState]}
           pulse={deviceState === "active"}
         />
-        {lowStock && (
-          <StatusBadge status="warning" label={
-            daysOfStock !== null
-              ? `~${Math.round(daysOfStock)}d stock`
-              : "Stock bajo"
-          } />
+        {daysOfStock !== null && (
+          <StatusBadge
+            status={lowStock ? "warning" : "online"}
+            label={`~${Math.round(daysOfStock)}d stock`}
+          />
         )}
       </div>
 
