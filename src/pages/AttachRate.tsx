@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown,
 import { useDevices, useMonthlyCutsMap, isStock } from "@/hooks/useDevices";
 import { titleCase } from "@/lib/utils";
 import { useEquipmentSales, useUpsertEquipmentSale, useDeleteEquipmentSale } from "@/hooks/useEquipmentSales";
+import { useTenantSettings } from "@/hooks/useTenantSettings";
 import { toast } from "sonner";
 
 function getLastNMonths(n: number): string[] {
@@ -22,17 +23,17 @@ function formatMonth(yyyymm: string): string {
   return `${names[parseInt(m) - 1]} ${y.slice(2)}`;
 }
 
-function rateColorClass(rate: number | null): string {
+function rateColorClass(rate: number | null, green = 80, yellow = 50): string {
   if (rate === null) return "text-muted-foreground/50";
-  if (rate >= 80) return "text-emerald-400";
-  if (rate >= 50) return "text-amber-400";
+  if (rate >= green) return "text-emerald-400";
+  if (rate >= yellow) return "text-amber-400";
   return "text-red-400";
 }
 
-function rateBadgeClass(rate: number | null): string {
+function rateBadgeClass(rate: number | null, green = 80, yellow = 50): string {
   if (rate === null) return "";
-  if (rate >= 80) return "bg-emerald-500/20 text-emerald-400";
-  if (rate >= 50) return "bg-amber-500/20 text-amber-400";
+  if (rate >= green) return "bg-emerald-500/20 text-emerald-400";
+  if (rate >= yellow) return "bg-amber-500/20 text-amber-400";
   return "bg-red-500/20 text-red-400";
 }
 
@@ -51,8 +52,12 @@ export default function AttachRate() {
   const { data: devices = [] } = useDevices();
   const { data: monthlyCutsMap } = useMonthlyCutsMap(12);
   const { data: sales = [] } = useEquipmentSales(selectedClient);
+  const { data: settings } = useTenantSettings();
   const upsertSale = useUpsertEquipmentSale();
   const deleteSale = useDeleteEquipmentSale();
+
+  const arGreen = settings?.attach_rate_green ?? 80;
+  const arYellow = settings?.attach_rate_yellow ?? 50;
 
   const months = useMemo(() => getLastNMonths(12), []);
 
@@ -305,7 +310,7 @@ export default function AttachRate() {
                       </div>
                       <span className="text-[10px] text-muted-foreground">{formatMonth(d.month)}</span>
                       {d.rate !== null && (
-                        <span className={`text-[10px] font-semibold tabular-nums ${rateColorClass(d.rate)}`}>
+                        <span className={`text-[10px] font-semibold tabular-nums ${rateColorClass(d.rate, arGreen, arYellow)}`}>
                           {d.rate.toFixed(0)}%
                         </span>
                       )}
@@ -343,7 +348,7 @@ export default function AttachRate() {
                       </td>
                       <td className="py-2 px-2 text-right">
                         {d.rate !== null ? (
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate)}`}>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate, arGreen, arYellow)}`}>
                             {d.rate.toFixed(1)}%
                           </span>
                         ) : <span className="text-muted-foreground/50">—</span>}
@@ -402,7 +407,7 @@ export default function AttachRate() {
                           </td>
                           <td className="py-2 px-2 text-right">
                             {b.avgRate !== null ? (
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(b.avgRate)}`}>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(b.avgRate, arGreen, arYellow)}`}>
                                 {b.avgRate.toFixed(1)}%
                               </span>
                             ) : <span className="text-muted-foreground/50">—</span>}
@@ -422,6 +427,8 @@ export default function AttachRate() {
                     branchName={b.branchName}
                     monthlyData={b.monthlyData}
                     avgRate={b.avgRate}
+                    arGreen={arGreen}
+                    arYellow={arYellow}
                   />
                 ))}
               </>
@@ -476,10 +483,12 @@ export default function AttachRate() {
   );
 }
 
-function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
+function BranchMonthlyDetail({ branchName, monthlyData, avgRate, arGreen, arYellow }: {
   branchName: string;
   monthlyData: { month: string; cuts: number; sold: number; rate: number | null }[];
   avgRate: number | null;
+  arGreen: number;
+  arYellow: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const recentMonths = monthlyData.slice(-6);
@@ -494,7 +503,7 @@ function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <span className="font-semibold">{titleCase(branchName)}</span>
           {avgRate !== null && (
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(avgRate)}`}>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(avgRate, arGreen, arYellow)}`}>
               {avgRate.toFixed(1)}%
             </span>
           )}
@@ -522,7 +531,7 @@ function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
                   </td>
                   <td className="py-2 px-2 text-right">
                     {d.rate !== null ? (
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate)}`}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate, arGreen, arYellow)}`}>
                         {d.rate.toFixed(1)}%
                       </span>
                     ) : <span className="text-muted-foreground/50">—</span>}

@@ -1,11 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const BCC_EMAIL = 'santiago.federico@bitec.cl'
-const LOW_STOCK_DAYS_THRESHOLD = 7
+// Defaults — overridden by tenant_settings if available
+let BCC_EMAIL = 'santiago.federico@bitec.cl'
+let LOW_STOCK_DAYS_THRESHOLD = 7
 const LOW_STOCK_FALLBACK_CUTS = 10
-const DISCONNECTED_DAYS_THRESHOLD = 5
-const ALERT_COOLDOWN_DAYS = 7        // send at most once per week
-const ALERT_MAX_WINDOW_DAYS = 14     // stop after 2 weeks
+let DISCONNECTED_DAYS_THRESHOLD = 5
+let ALERT_COOLDOWN_DAYS = 7
+let ALERT_MAX_WINDOW_DAYS = 14
 
 Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -23,6 +24,20 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  // Load configurable thresholds from tenant_settings
+  const { data: tenantSettings } = await supabase
+    .from('tenant_settings')
+    .select('bcc_email, low_stock_days, alert_cooldown_days, alert_max_window_days')
+    .eq('tenant_name', 'default')
+    .single()
+
+  if (tenantSettings) {
+    if (tenantSettings.bcc_email) BCC_EMAIL = tenantSettings.bcc_email
+    LOW_STOCK_DAYS_THRESHOLD = tenantSettings.low_stock_days ?? LOW_STOCK_DAYS_THRESHOLD
+    ALERT_COOLDOWN_DAYS = tenantSettings.alert_cooldown_days ?? ALERT_COOLDOWN_DAYS
+    ALERT_MAX_WINDOW_DAYS = tenantSettings.alert_max_window_days ?? ALERT_MAX_WINDOW_DAYS
+  }
 
   const { data: devices, error: devErr } = await supabase
     .from('devices')

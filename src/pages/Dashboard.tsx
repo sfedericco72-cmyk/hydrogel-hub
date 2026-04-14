@@ -1,7 +1,7 @@
 import { StatCard } from "@/components/StatCard";
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp } from "lucide-react";
+import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp, Settings } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
@@ -145,6 +145,12 @@ export default function Dashboard() {
             >
               <Mail className="h-4 w-4" />
               Emails
+            </button>
+            <button
+              onClick={() => navigate("/setup")}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
+            >
+              <Settings className="h-4 w-4" />
             </button>
           </div>
         </div>
