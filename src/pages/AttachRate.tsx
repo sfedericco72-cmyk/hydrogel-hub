@@ -481,10 +481,12 @@ export default function AttachRate() {
   );
 }
 
-function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
+function BranchMonthlyDetail({ branchName, monthlyData, avgRate, arGreen, arYellow }: {
   branchName: string;
   monthlyData: { month: string; cuts: number; sold: number; rate: number | null }[];
   avgRate: number | null;
+  arGreen: number;
+  arYellow: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const recentMonths = monthlyData.slice(-6);
