@@ -11,8 +11,10 @@ export interface TemplateEntry {
 
 import { template as stockBajo } from './stock-bajo.tsx'
 import { template as dispositivoDesconectado } from './dispositivo-desconectado.tsx'
+import { template as emailNoConfigurado } from './email-no-configurado.tsx'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'stock-bajo': stockBajo,
   'dispositivo-desconectado': dispositivoDesconectado,
+  'email-no-configurado': emailNoConfigurado,
 }
