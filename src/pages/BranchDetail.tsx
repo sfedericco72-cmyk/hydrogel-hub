@@ -95,6 +95,7 @@ export default function BranchDetail() {
   const { data: device, isLoading } = useDevice(id);
   const { data: history = [] } = useCutsHistory(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
+  const { data: lastCutDates } = useLastCutDates();
   const [resolution, setResolution] = useState<TimeResolution>("monthly");
 
   const chartData = useMemo(() => aggregateHistory(history, resolution), [history, resolution]);
