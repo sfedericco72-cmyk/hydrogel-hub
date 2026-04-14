@@ -97,6 +97,7 @@ export default function BranchDetail() {
   const { data: history = [] } = useCutsHistory(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
   const { data: lastCutDates } = useLastCutDates();
+  const { data: monthlyCutsMap } = useMonthlyCutsMap();
   const [resolution, setResolution] = useState<TimeResolution>("monthly");
 
   const chartData = useMemo(() => aggregateHistory(history, resolution), [history, resolution]);
