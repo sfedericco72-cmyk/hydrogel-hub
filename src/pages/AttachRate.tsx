@@ -427,6 +427,8 @@ export default function AttachRate() {
                     branchName={b.branchName}
                     monthlyData={b.monthlyData}
                     avgRate={b.avgRate}
+                    arGreen={arGreen}
+                    arYellow={arYellow}
                   />
                 ))}
               </>
