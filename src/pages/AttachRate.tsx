@@ -239,11 +239,11 @@ export default function AttachRate() {
           <SalesForm
             clients={clients}
             defaultClient={selectedClient !== "all" ? selectedClient : ""}
-            branches={clientDevices.map(d => d.branch_name || d.fixno)}
+            devices={devices}
             onSubmit={async (data) => {
               try {
                 await upsertSale.mutateAsync(data);
-                toast.success(`Ventas guardadas: ${data.units_sold} equipos en ${formatMonth(data.period)}`);
+                toast.success(`Ventas guardadas: ${data.units_sold} equipos en ${formatMonth(data.period)} — ${data.branch_name}`);
               } catch (e: any) {
                 toast.error("Error: " + e.message);
               }
