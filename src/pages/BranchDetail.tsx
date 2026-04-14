@@ -274,7 +274,7 @@ export default function BranchDetail() {
                     <th className="pb-2 pr-4">Fecha</th>
                     <th className="pb-2 pr-4">Tipo</th>
                     <th className="pb-2 pr-4 text-right">Cantidad</th>
-                    <th className="pb-2 pr-4 text-right">Saldo</th>
+                    
                     <th className="pb-2 pr-4">Nº Factura</th>
                     <th className="pb-2">Nota</th>
                   </tr>
@@ -304,9 +304,6 @@ export default function BranchDetail() {
                       </td>
                       <td className={`py-2 pr-4 text-right font-mono font-semibold ${tx.quantity >= 0 ? "text-green-400" : "text-red-400"}`}>
                         {tx.quantity >= 0 ? "+" : ""}{tx.quantity.toLocaleString("es-AR")}
-                      </td>
-                      <td className="py-2 pr-4 text-right font-mono text-muted-foreground">
-                        {tx.balance_after?.toLocaleString("es-AR") ?? "—"}
                       </td>
                       <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">
                         {tx.bill_no}
