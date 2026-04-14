@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown, Building2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown, Building2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useDevices, useMonthlyCutsMap, isStock } from "@/hooks/useDevices";
 import { useEquipmentSales, useUpsertEquipmentSale, useDeleteEquipmentSale } from "@/hooks/useEquipmentSales";
 import { toast } from "sonner";
