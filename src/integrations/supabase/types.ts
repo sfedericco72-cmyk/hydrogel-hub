@@ -314,6 +314,60 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_settings: {
+        Row: {
+          alert_cooldown_days: number
+          alert_max_window_days: number
+          attach_rate_green: number
+          attach_rate_yellow: number
+          bcc_email: string | null
+          company_name: string
+          connection_green_days: number
+          connection_yellow_days: number
+          created_at: string
+          disconnect_months: number
+          id: string
+          logo_url: string | null
+          low_stock_days: number
+          tenant_name: string
+          updated_at: string
+        }
+        Insert: {
+          alert_cooldown_days?: number
+          alert_max_window_days?: number
+          attach_rate_green?: number
+          attach_rate_yellow?: number
+          bcc_email?: string | null
+          company_name?: string
+          connection_green_days?: number
+          connection_yellow_days?: number
+          created_at?: string
+          disconnect_months?: number
+          id?: string
+          logo_url?: string | null
+          low_stock_days?: number
+          tenant_name?: string
+          updated_at?: string
+        }
+        Update: {
+          alert_cooldown_days?: number
+          alert_max_window_days?: number
+          attach_rate_green?: number
+          attach_rate_yellow?: number
+          bcc_email?: string | null
+          company_name?: string
+          connection_green_days?: number
+          connection_yellow_days?: number
+          created_at?: string
+          disconnect_months?: number
+          id?: string
+          logo_url?: string | null
+          low_stock_days?: number
+          tenant_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
