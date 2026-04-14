@@ -45,6 +45,7 @@ export default function AttachRate() {
   const [selectedClient, setSelectedClient] = useState(initialClient);
   const [showForm, setShowForm] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("consolidado");
+  const [rankSort, setRankSort] = useState<{ col: "branch" | "cuts" | "sold" | "rate"; dir: "asc" | "desc" }>({ col: "rate", dir: "desc" });
 
   const { data: devices = [] } = useDevices();
   const { data: monthlyCutsMap } = useMonthlyCutsMap(12);
