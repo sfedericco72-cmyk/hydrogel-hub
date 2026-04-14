@@ -77,14 +77,15 @@ Deno.serve(async (req) => {
 
       if (!hasAlertEmail) {
         // No email configured — notify Santiago
+        // Dedup: check if we already notified about this device's missing email today
+        const dedupKey = `no-email-stock-${device.fixno}-${new Date().toISOString().slice(0, 10)}`
         const { data: recentAlert } = await supabase
           .from('email_send_log')
           .select('id')
           .eq('template_name', 'email-no-configurado')
           .eq('recipient_email', BCC_EMAIL)
           .gte('created_at', oneDayAgo)
-          .ilike('message_id', `%${device.fixno}%stock%`)
-          .limit(1)
+          .limit(100)
 
         if (!recentAlert?.length) {
           await supabase.functions.invoke('send-transactional-email', {
