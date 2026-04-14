@@ -30,10 +30,10 @@ function rateColorClass(rate: number | null, green = 80, yellow = 50): string {
   return "text-red-400";
 }
 
-function rateBadgeClass(rate: number | null): string {
+function rateBadgeClass(rate: number | null, green = 80, yellow = 50): string {
   if (rate === null) return "";
-  if (rate >= 80) return "bg-emerald-500/20 text-emerald-400";
-  if (rate >= 50) return "bg-amber-500/20 text-amber-400";
+  if (rate >= green) return "bg-emerald-500/20 text-emerald-400";
+  if (rate >= yellow) return "bg-amber-500/20 text-amber-400";
   return "bg-red-500/20 text-red-400";
 }
 
