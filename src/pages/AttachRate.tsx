@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown, Building2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown, Building2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useDevices, useMonthlyCutsMap, isStock } from "@/hooks/useDevices";
 import { useEquipmentSales, useUpsertEquipmentSale, useDeleteEquipmentSale } from "@/hooks/useEquipmentSales";
 import { toast } from "sonner";
@@ -45,6 +45,7 @@ export default function AttachRate() {
   const [selectedClient, setSelectedClient] = useState(initialClient);
   const [showForm, setShowForm] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("consolidado");
+  const [rankSort, setRankSort] = useState<{ col: "branch" | "cuts" | "sold" | "rate"; dir: "asc" | "desc" }>({ col: "rate", dir: "desc" });
 
   const { data: devices = [] } = useDevices();
   const { data: monthlyCutsMap } = useMonthlyCutsMap(12);
@@ -369,15 +370,23 @@ export default function AttachRate() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground">Sucursal</th>
-                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Láminas</th>
-                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Equipos</th>
-                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Attach Rate</th>
+                        <SortHeader col="branch" current={rankSort} onSort={setRankSort} align="left">Sucursal</SortHeader>
+                        <SortHeader col="cuts" current={rankSort} onSort={setRankSort}>Láminas</SortHeader>
+                        <SortHeader col="sold" current={rankSort} onSort={setRankSort}>Equipos</SortHeader>
+                        <SortHeader col="rate" current={rankSort} onSort={setRankSort}>Attach Rate</SortHeader>
                       </tr>
                     </thead>
                     <tbody>
                       {[...branchSummaries]
-                        .sort((a, b) => (b.avgRate ?? -1) - (a.avgRate ?? -1))
+                        .sort((a, b) => {
+                          const dir = rankSort.dir === "asc" ? 1 : -1;
+                          switch (rankSort.col) {
+                            case "branch": return dir * a.branchName.localeCompare(b.branchName);
+                            case "cuts": return dir * (a.totalCuts - b.totalCuts);
+                            case "sold": return dir * (a.totalSold - b.totalSold);
+                            case "rate": return dir * ((a.avgRate ?? -1) - (b.avgRate ?? -1));
+                          }
+                        })
                         .map(b => (
                         <tr key={b.branchName} className="border-b border-border/50 last:border-0">
                           <td className="py-2 pr-4">
@@ -536,6 +545,40 @@ function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: str
       </div>
       <p className="mt-2 text-2xl font-bold tabular-nums">{value}</p>
     </div>
+  );
+}
+
+type SortCol = "branch" | "cuts" | "sold" | "rate";
+type SortState = { col: SortCol; dir: "asc" | "desc" };
+
+function SortHeader({ col, current, onSort, align, children }: {
+  col: SortCol;
+  current: SortState;
+  onSort: (s: SortState) => void;
+  align?: "left" | "right";
+  children: React.ReactNode;
+}) {
+  const isActive = current.col === col;
+  const handleClick = () => {
+    if (isActive) {
+      onSort({ col, dir: current.dir === "asc" ? "desc" : "asc" });
+    } else {
+      onSort({ col, dir: col === "branch" ? "asc" : "desc" });
+    }
+  };
+  const Icon = isActive ? (current.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <th
+      onClick={handleClick}
+      className={`pb-2 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors ${
+        align === "left" ? "text-left pr-4 pl-0" : "text-right"
+      } ${isActive ? "text-foreground" : ""}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <Icon className="h-3 w-3" />
+      </span>
+    </th>
   );
 }
 
