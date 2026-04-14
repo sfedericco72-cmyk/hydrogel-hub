@@ -1,7 +1,8 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive } from "lucide-react";
+import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive, Mail } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ function formatSyncDate(dateStr: string | null) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState<ClientFilter>("all");
   const [alertsOnly, setAlertsOnly] = useState(false);
@@ -111,14 +113,23 @@ export default function Dashboard() {
               <span>Última sincronización: {formatSyncDate(lastSyncDate)}</span>
             </div>
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Sincronizando..." : "Sincronizar"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Sincronizando..." : "Sincronizar"}
+            </button>
+            <button
+              onClick={() => navigate("/emails")}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
+            >
+              <Mail className="h-4 w-4" />
+              Emails
+            </button>
+          </div>
         </div>
 
         <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
