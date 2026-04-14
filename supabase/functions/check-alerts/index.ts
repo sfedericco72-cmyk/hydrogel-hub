@@ -73,45 +73,73 @@ Deno.serve(async (req) => {
     }
 
     if (isLowStock) {
-      // Check we haven't sent this alert recently (last 24h)
       const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString()
-      const { data: recentAlert } = await supabase
-        .from('email_send_log')
-        .select('id')
-        .eq('template_name', 'stock-bajo')
-        .eq('recipient_email', device.alert_email)
-        .gte('created_at', oneDayAgo)
-        .limit(1)
 
-      if (!recentAlert?.length) {
-        await supabase.functions.invoke('send-transactional-email', {
-          body: {
-            templateName: 'stock-bajo',
-            recipientEmail: device.alert_email,
-            idempotencyKey: `stock-bajo-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
-            templateData: {
-              branchName: device.branch_name,
-              fixno: device.fixno,
-              remainingCuts: remaining,
-              estimatedDays,
+      if (!hasAlertEmail) {
+        // No email configured — notify Santiago
+        const { data: recentAlert } = await supabase
+          .from('email_send_log')
+          .select('id')
+          .eq('template_name', 'email-no-configurado')
+          .eq('recipient_email', BCC_EMAIL)
+          .gte('created_at', oneDayAgo)
+          .ilike('message_id', `%${device.fixno}%stock%`)
+          .limit(1)
+
+        if (!recentAlert?.length) {
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'email-no-configurado',
+              recipientEmail: BCC_EMAIL,
+              idempotencyKey: `no-email-stock-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+              templateData: {
+                branchName: device.branch_name,
+                fixno: device.fixno,
+                customerName: device.customer_name,
+                alertType: 'stock bajo',
+              },
             },
-          },
-        })
-        // Also send BCC copy
-        await supabase.functions.invoke('send-transactional-email', {
-          body: {
-            templateName: 'stock-bajo',
-            recipientEmail: BCC_EMAIL,
-            idempotencyKey: `stock-bajo-bcc-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
-            templateData: {
-              branchName: device.branch_name,
-              fixno: device.fixno,
-              remainingCuts: remaining,
-              estimatedDays,
+          })
+          alertsSent++
+        }
+      } else {
+        const { data: recentAlert } = await supabase
+          .from('email_send_log')
+          .select('id')
+          .eq('template_name', 'stock-bajo')
+          .eq('recipient_email', device.alert_email)
+          .gte('created_at', oneDayAgo)
+          .limit(1)
+
+        if (!recentAlert?.length) {
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'stock-bajo',
+              recipientEmail: device.alert_email,
+              idempotencyKey: `stock-bajo-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+              templateData: {
+                branchName: device.branch_name,
+                fixno: device.fixno,
+                remainingCuts: remaining,
+                estimatedDays,
+              },
             },
-          },
-        })
-        alertsSent++
+          })
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'stock-bajo',
+              recipientEmail: BCC_EMAIL,
+              idempotencyKey: `stock-bajo-bcc-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+              templateData: {
+                branchName: device.branch_name,
+                fixno: device.fixno,
+                remainingCuts: remaining,
+                estimatedDays,
+              },
+            },
+          })
+          alertsSent++
+        }
       }
     }
 
@@ -126,41 +154,69 @@ Deno.serve(async (req) => {
 
     if (daysSinceOnline >= DISCONNECTED_DAYS_THRESHOLD) {
       const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString()
-      const { data: recentAlert } = await supabase
-        .from('email_send_log')
-        .select('id')
-        .eq('template_name', 'dispositivo-desconectado')
-        .eq('recipient_email', device.alert_email)
-        .gte('created_at', oneDayAgo)
-        .limit(1)
 
-      if (!recentAlert?.length) {
-        await supabase.functions.invoke('send-transactional-email', {
-          body: {
-            templateName: 'dispositivo-desconectado',
-            recipientEmail: device.alert_email,
-            idempotencyKey: `desconectado-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
-            templateData: {
-              branchName: device.branch_name,
-              fixno: device.fixno,
-              daysSinceOnline,
+      if (!hasAlertEmail) {
+        const { data: recentAlert } = await supabase
+          .from('email_send_log')
+          .select('id')
+          .eq('template_name', 'email-no-configurado')
+          .eq('recipient_email', BCC_EMAIL)
+          .gte('created_at', oneDayAgo)
+          .ilike('message_id', `%${device.fixno}%desconectado%`)
+          .limit(1)
+
+        if (!recentAlert?.length) {
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'email-no-configurado',
+              recipientEmail: BCC_EMAIL,
+              idempotencyKey: `no-email-desconectado-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+              templateData: {
+                branchName: device.branch_name,
+                fixno: device.fixno,
+                customerName: device.customer_name,
+                alertType: 'equipo desconectado',
+              },
             },
-          },
-        })
-        // BCC copy
-        await supabase.functions.invoke('send-transactional-email', {
-          body: {
-            templateName: 'dispositivo-desconectado',
-            recipientEmail: BCC_EMAIL,
-            idempotencyKey: `desconectado-bcc-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
-            templateData: {
-              branchName: device.branch_name,
-              fixno: device.fixno,
-              daysSinceOnline,
+          })
+          alertsSent++
+        }
+      } else {
+        const { data: recentAlert } = await supabase
+          .from('email_send_log')
+          .select('id')
+          .eq('template_name', 'dispositivo-desconectado')
+          .eq('recipient_email', device.alert_email)
+          .gte('created_at', oneDayAgo)
+          .limit(1)
+
+        if (!recentAlert?.length) {
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'dispositivo-desconectado',
+              recipientEmail: device.alert_email,
+              idempotencyKey: `desconectado-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+              templateData: {
+                branchName: device.branch_name,
+                fixno: device.fixno,
+                daysSinceOnline,
+              },
             },
-          },
-        })
-        alertsSent++
+          })
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'dispositivo-desconectado',
+              recipientEmail: BCC_EMAIL,
+              idempotencyKey: `desconectado-bcc-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+              templateData: {
+                branchName: device.branch_name,
+                fixno: device.fixno,
+                daysSinceOnline,
+              },
+            },
+          })
+          alertsSent++
+        }
       }
     }
   }
