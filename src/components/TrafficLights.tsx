@@ -54,8 +54,8 @@ export function CutsTrafficLights({ monthlyCuts }: { monthlyCuts: Map<string, nu
   return <TrafficLights lights={lights} title="Cortes" />;
 }
 
-/** Connection traffic light: green = last 7d, yellow = last 14d, red = >21d */
-export function ConnectionTrafficLight({ latestOnlineTime }: { latestOnlineTime: string | null }) {
+/** Connection traffic light */
+export function ConnectionTrafficLight({ latestOnlineTime, greenDays = 7, yellowDays = 14 }: { latestOnlineTime: string | null; greenDays?: number; yellowDays?: number }) {
   let color: LightColor = "red";
   let label = "Sin conexión";
 
@@ -64,12 +64,12 @@ export function ConnectionTrafficLight({ latestOnlineTime }: { latestOnlineTime:
     const now = new Date();
     const diffDays = (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24);
 
-    if (diffDays <= 7) {
+    if (diffDays <= greenDays) {
       color = "green";
-      label = "< 7 días";
-    } else if (diffDays <= 14) {
+      label = `< ${greenDays} días`;
+    } else if (diffDays <= yellowDays) {
       color = "yellow";
-      label = "< 14 días";
+      label = `< ${yellowDays} días`;
     } else {
       color = "red";
       label = `${Math.round(diffDays)}d`;
