@@ -19,10 +19,17 @@ function formatDateTime(dateStr: string | null) {
 
 type TimeResolution = "weekly" | "monthly" | "annual";
 
+function getISOWeekNumber(d: Date): [number, number] {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return [date.getUTCFullYear(), weekNo];
+}
+
 function getWeekLabel(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00");
-  const startOfYear = new Date(d.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+  const [, weekNum] = getISOWeekNumber(d);
   const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   return `S${weekNum} ${months[d.getMonth()]}`;
 }
@@ -35,9 +42,8 @@ function getMonthLabel(monthStr: string) {
 
 function getWeekKey(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00");
-  const startOfYear = new Date(d.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
-  return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+  const [year, weekNum] = getISOWeekNumber(d);
+  return `${year}-W${String(weekNum).padStart(2, "0")}`;
 }
 
 interface ChartPoint {
