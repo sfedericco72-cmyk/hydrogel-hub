@@ -8,6 +8,7 @@ import {
 import { useDevice, useLastCutDates, useMonthlyCutsMap, getDeviceState, DEVICE_STATE_LABELS } from "@/hooks/useDevices";
 import { useCutsHistory } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
+import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
 
@@ -138,9 +139,9 @@ export default function BranchDetail() {
         </button>
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">{device.branch_name || device.fixno}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{titleCase(device.branch_name) || device.fixno}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {device.customer_name || "Sin cliente"} · <span className="font-mono text-xs">{device.fixno}</span>
+            {titleCase(device.customer_name) || "Sin cliente"} · <span className="font-mono text-xs">{device.fixno}</span>
           </p>
         </div>
 

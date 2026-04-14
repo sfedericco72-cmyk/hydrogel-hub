@@ -5,6 +5,7 @@ import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, 
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -53,7 +54,7 @@ export default function Dashboard() {
 
   const scopedDevices = useMemo(() => {
     if (clientFilter === "all") return devices;
-    return devices.filter(d => (d.customer_name || "Sin cliente") === clientFilter);
+    return devices.filter(d => titleCase(d.customer_name) === clientFilter);
   }, [devices, clientFilter]);
 
   const stateCounts = useMemo(() => {
@@ -66,7 +67,7 @@ export default function Dashboard() {
   const clients = useMemo(() => {
     const map = new Map<string, number>();
     devices.forEach(d => {
-      const name = d.customer_name || "Sin cliente";
+      const name = titleCase(d.customer_name) || "Sin cliente";
       map.set(name, (map.get(name) ?? 0) + 1);
     });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -84,7 +85,7 @@ export default function Dashboard() {
     );
 
   const grouped = filtered.reduce<Record<string, typeof filtered>>((acc, d) => {
-    const key = d.customer_name || "Sin cliente";
+    const key = titleCase(d.customer_name) || "Sin cliente";
     if (!acc[key]) acc[key] = [];
     acc[key].push(d);
     return acc;
