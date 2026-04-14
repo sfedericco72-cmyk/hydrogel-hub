@@ -2,10 +2,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   ArrowLeft, Scissors, Wifi, WifiOff,
-  Phone, User, Clock, HardDrive, Package, Globe, BarChart3
+  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw
 } from "lucide-react";
 import { useDevice, isOnline } from "@/hooks/useDevices";
 import { useCutsHistory } from "@/hooks/useCutsHistory";
+import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
 
