@@ -1,7 +1,8 @@
 import { StatCard } from "@/components/StatCard";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive } from "lucide-react";
+import { Building2, Scissors, AlertTriangle, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Archive, Mail } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, getDeviceState, type DeviceState } from "@/hooks/useDevices";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
