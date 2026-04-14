@@ -1,4 +1,5 @@
 import { Device, getDeviceState, getDaysOfStock, hasLowStock, DEVICE_STATE_LABELS, type DeviceState, useMonthlyCutsMap, getConnectionLevel } from "@/hooks/useDevices";
+import { titleCase } from "@/lib/utils";
 import { CutsTrafficLights, ConnectionTrafficLight } from "./TrafficLights";
 import { Scissors, ChevronRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -29,9 +30,9 @@ export function DeviceCard({ device, lastCutDates, avgDailyCuts, monthlyCutsMap 
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold">{device.branch_name || device.fixno}</h3>
+          <h3 className="truncate font-semibold">{titleCase(device.branch_name) || device.fixno}</h3>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {device.customer_name || "Sin cliente"}
+            {titleCase(device.customer_name) || "Sin cliente"}
           </p>
         </div>
         <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />

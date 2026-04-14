@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useDevices, useLastCutDates, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Mail, Save, Check, Activity, WifiOff, Users, ChevronDown, ChevronRight, History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -28,7 +29,7 @@ export default function DeviceEmails() {
 
   const scopedDevices = useMemo(() => {
     if (clientFilter === "all") return nonStockDevices;
-    return nonStockDevices.filter((d) => (d.customer_name || "Sin cliente") === clientFilter);
+    return nonStockDevices.filter((d) => (titleCase(d.customer_name) || "Sin cliente") === clientFilter);
   }, [nonStockDevices, clientFilter]);
 
   const filtered = useMemo(() => {
@@ -45,7 +46,7 @@ export default function DeviceEmails() {
   const clients = useMemo(() => {
     const map = new Map<string, number>();
     nonStockDevices.forEach((d) => {
-      const name = d.customer_name || "Sin cliente";
+      const name = titleCase(d.customer_name) || "Sin cliente";
       map.set(name, (map.get(name) ?? 0) + 1);
     });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -100,7 +101,7 @@ export default function DeviceEmails() {
 
   const grouped = filtered.reduce<Record<string, typeof filtered>>(
     (acc, d) => {
-      const key = d.customer_name || "Sin cliente";
+      const key = titleCase(d.customer_name) || "Sin cliente";
       if (!acc[key]) acc[key] = [];
       acc[key].push(d);
       return acc;
@@ -228,7 +229,7 @@ export default function DeviceEmails() {
                         <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">
-                              {device.branch_name}
+                              {titleCase(device.branch_name)}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
                               {device.fixno}
