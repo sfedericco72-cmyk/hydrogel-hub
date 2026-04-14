@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown,
 import { useDevices, useMonthlyCutsMap, isStock } from "@/hooks/useDevices";
 import { titleCase } from "@/lib/utils";
 import { useEquipmentSales, useUpsertEquipmentSale, useDeleteEquipmentSale } from "@/hooks/useEquipmentSales";
+import { useTenantSettings } from "@/hooks/useTenantSettings";
 import { toast } from "sonner";
 
 function getLastNMonths(n: number): string[] {
@@ -22,10 +23,10 @@ function formatMonth(yyyymm: string): string {
   return `${names[parseInt(m) - 1]} ${y.slice(2)}`;
 }
 
-function rateColorClass(rate: number | null): string {
+function rateColorClass(rate: number | null, green = 80, yellow = 50): string {
   if (rate === null) return "text-muted-foreground/50";
-  if (rate >= 80) return "text-emerald-400";
-  if (rate >= 50) return "text-amber-400";
+  if (rate >= green) return "text-emerald-400";
+  if (rate >= yellow) return "text-amber-400";
   return "text-red-400";
 }
 
