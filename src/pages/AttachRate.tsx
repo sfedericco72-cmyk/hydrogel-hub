@@ -492,7 +492,7 @@ function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
       >
         <div className="flex items-center gap-3">
           <Building2 className="h-4 w-4 text-muted-foreground" />
-          <span className="font-semibold">{branchName}</span>
+          <span className="font-semibold">{titleCase(branchName)}</span>
           {avgRate !== null && (
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(avgRate)}`}>
               {avgRate.toFixed(1)}%
