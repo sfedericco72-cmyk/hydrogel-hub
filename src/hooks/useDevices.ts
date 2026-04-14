@@ -125,7 +125,7 @@ export function useMonthlyCutsMap(months = 6) {
   });
 }
 
-const LOW_STOCK_DAYS = 7;
+export const LOW_STOCK_DAYS = 7;
 
 /** Calculate estimated days of stock remaining */
 export function getDaysOfStock(
@@ -138,14 +138,15 @@ export function getDaysOfStock(
   return (device.remaining_cuts ?? 0) / avg;
 }
 
-/** Check if device has low stock (< 7 days of estimated usage) */
+/** Check if device has low stock */
 export function hasLowStock(
   device: Device,
-  avgDailyCuts: Map<string, number> | undefined
+  avgDailyCuts: Map<string, number> | undefined,
+  lowStockDays = LOW_STOCK_DAYS
 ): boolean {
   const days = getDaysOfStock(device, avgDailyCuts);
   if (days === null) return (device.remaining_cuts ?? 0) <= 10;
-  return days < LOW_STOCK_DAYS;
+  return days < lowStockDays;
 }
 
 export type DeviceState = "stock" | "active" | "disconnected";
@@ -163,7 +164,8 @@ export function isStock(device: Device): boolean {
  */
 export function getDeviceState(
   device: Device,
-  lastCutDates: Map<string, string> | undefined
+  lastCutDates: Map<string, string> | undefined,
+  disconnectMonths = 3
 ): DeviceState {
   if (isStock(device)) return "stock";
 
@@ -171,9 +173,9 @@ export function getDeviceState(
     if (!lastCutDates) return true;
     const lastCut = lastCutDates.get(device.fixno);
     if (!lastCut) return false;
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    return new Date(lastCut) >= threeMonthsAgo;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - disconnectMonths);
+    return new Date(lastCut) >= cutoff;
   })();
 
   return hasCutsRecently ? "active" : "disconnected";
@@ -193,13 +195,13 @@ export const DEVICE_STATE_LABELS: Record<DeviceState, string> = {
  */
 export type ConnectionLevel = "green" | "yellow" | "red";
 
-export function getConnectionLevel(device: Device): ConnectionLevel {
+export function getConnectionLevel(device: Device, greenDays = 7, yellowDays = 14): ConnectionLevel {
   if (!device.latest_online_time) return "red";
   const last = new Date(device.latest_online_time);
   const now = new Date();
   const diffDays = (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24);
-  if (diffDays <= 7) return "green";
-  if (diffDays <= 14) return "yellow";
+  if (diffDays <= greenDays) return "green";
+  if (diffDays <= yellowDays) return "yellow";
   return "red";
 }
 
