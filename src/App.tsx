@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import BranchDetail from "./pages/BranchDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import DeviceEmails from "./pages/DeviceEmails.tsx";
+import Unsubscribe from "./pages/Unsubscribe.tsx";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/sucursal/:id" element={<BranchDetail />} />
           <Route path="/emails" element={<DeviceEmails />} />
+          <Route path="/unsubscribe" element={<Unsubscribe />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
