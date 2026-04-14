@@ -145,31 +145,20 @@ Deno.serve(async (req) => {
       const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString()
 
       if (!hasAlertEmail) {
-        const { data: recentAlert } = await supabase
-          .from('email_send_log')
-          .select('id')
-          .eq('template_name', 'email-no-configurado')
-          .eq('recipient_email', BCC_EMAIL)
-          .gte('created_at', oneDayAgo)
-          .ilike('message_id', `%${device.fixno}%desconectado%`)
-          .limit(1)
-
-        if (!recentAlert?.length) {
-          await supabase.functions.invoke('send-transactional-email', {
-            body: {
-              templateName: 'email-no-configurado',
-              recipientEmail: BCC_EMAIL,
-              idempotencyKey: `no-email-desconectado-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
-              templateData: {
-                branchName: device.branch_name,
-                fixno: device.fixno,
-                customerName: device.customer_name,
-                alertType: 'equipo desconectado',
-              },
+        await supabase.functions.invoke('send-transactional-email', {
+          body: {
+            templateName: 'email-no-configurado',
+            recipientEmail: BCC_EMAIL,
+            idempotencyKey: `no-email-desconectado-${device.fixno}-${new Date().toISOString().slice(0, 10)}`,
+            templateData: {
+              branchName: device.branch_name,
+              fixno: device.fixno,
+              customerName: device.customer_name,
+              alertType: 'equipo desconectado',
             },
-          })
-          alertsSent++
-        }
+          },
+        })
+        alertsSent++
       } else {
         const { data: recentAlert } = await supabase
           .from('email_send_log')
