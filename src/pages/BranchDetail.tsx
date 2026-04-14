@@ -146,12 +146,12 @@ export default function BranchDetail() {
         </div>
 
         {/* Status Grid */}
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Estado */}
           {(() => {
             const deviceState = device ? getDeviceState(device, lastCutDates) : "stock";
             const stateStatusMap: Record<string, "online" | "offline" | "warning"> = {
               active: "online",
-              inactive: "warning",
               disconnected: "offline",
               stock: "offline",
             };
@@ -170,21 +170,28 @@ export default function BranchDetail() {
             );
           })()}
 
+          {/* Cortes - Semáforo 3 meses */}
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-              {online ? <Wifi className="h-4 w-4 text-status-online" /> : <WifiOff className="h-4 w-4 text-status-offline" />}
-              Conectividad
+              <Scissors className="h-4 w-4" />
+              Ventas
             </div>
-            <StatusBadge
-              status={online ? "online" : "offline"}
-              label={online ? "Online" : "Offline"}
-              pulse={online}
-            />
+            <CutsTrafficLights monthlyCuts={monthlyCutsMap?.get(device.fixno)} />
+          </div>
+
+          {/* Conexión - Semáforo */}
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Globe className="h-4 w-4" />
+              Conexión
+            </div>
+            <ConnectionTrafficLight latestOnlineTime={device.latest_online_time} />
             <p className="mt-2 text-xs text-muted-foreground">
-              Última conexión: {formatDateTime(device.latest_online_time)}
+              Última: {formatDateTime(device.latest_online_time)}
             </p>
           </div>
 
+          {/* Stock */}
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
               <Package className="h-4 w-4" />
