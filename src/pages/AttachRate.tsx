@@ -52,8 +52,12 @@ export default function AttachRate() {
   const { data: devices = [] } = useDevices();
   const { data: monthlyCutsMap } = useMonthlyCutsMap(12);
   const { data: sales = [] } = useEquipmentSales(selectedClient);
+  const { data: settings } = useTenantSettings();
   const upsertSale = useUpsertEquipmentSale();
   const deleteSale = useDeleteEquipmentSale();
+
+  const arGreen = settings?.attach_rate_green ?? 80;
+  const arYellow = settings?.attach_rate_yellow ?? 50;
 
   const months = useMemo(() => getLastNMonths(12), []);
 
