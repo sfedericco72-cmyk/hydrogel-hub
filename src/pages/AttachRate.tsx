@@ -548,6 +548,40 @@ function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: str
   );
 }
 
+type SortCol = "branch" | "cuts" | "sold" | "rate";
+type SortState = { col: SortCol; dir: "asc" | "desc" };
+
+function SortHeader({ col, current, onSort, align, children }: {
+  col: SortCol;
+  current: SortState;
+  onSort: (s: SortState) => void;
+  align?: "left" | "right";
+  children: React.ReactNode;
+}) {
+  const isActive = current.col === col;
+  const handleClick = () => {
+    if (isActive) {
+      onSort({ col, dir: current.dir === "asc" ? "desc" : "asc" });
+    } else {
+      onSort({ col, dir: col === "branch" ? "asc" : "desc" });
+    }
+  };
+  const Icon = isActive ? (current.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <th
+      onClick={handleClick}
+      className={`pb-2 px-2 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors ${
+        align === "left" ? "text-left pr-4 pl-0" : "text-right"
+      } ${isActive ? "text-foreground" : ""}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <Icon className="h-3 w-3" />
+      </span>
+    </th>
+  );
+}
+
 function SalesForm({
   clients,
   defaultClient,
