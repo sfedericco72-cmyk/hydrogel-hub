@@ -1,7 +1,7 @@
 import { StatCard } from "@/components/StatCard";
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail } from "lucide-react";
+import { Building2, Search, RefreshCw, Users, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDevices, hasAlert, useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
@@ -130,6 +130,13 @@ export default function Dashboard() {
             >
               <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
               {syncing ? "Sincronizando..." : "Sincronizar"}
+            </button>
+            <button
+              onClick={() => navigate(`/attach-rate${clientFilter !== "all" ? `?client=${encodeURIComponent(clientFilter)}` : ""}`)}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Attach Rate
             </button>
             <button
               onClick={() => navigate("/emails")}

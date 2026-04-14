@@ -8,6 +8,7 @@ import BranchDetail from "./pages/BranchDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import DeviceEmails from "./pages/DeviceEmails.tsx";
 import Unsubscribe from "./pages/Unsubscribe.tsx";
+import AttachRate from "./pages/AttachRate.tsx";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/sucursal/:id" element={<BranchDetail />} />
+          <Route path="/attach-rate" element={<AttachRate />} />
           <Route path="/emails" element={<DeviceEmails />} />
           <Route path="/unsubscribe" element={<Unsubscribe />} />
           <Route path="*" element={<NotFound />} />

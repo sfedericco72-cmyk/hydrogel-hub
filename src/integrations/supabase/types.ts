@@ -254,6 +254,42 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment_sales: {
+        Row: {
+          branch_name: string | null
+          created_at: string
+          customer_name: string
+          id: string
+          notes: string | null
+          period: string
+          source: string
+          units_sold: number
+          updated_at: string
+        }
+        Insert: {
+          branch_name?: string | null
+          created_at?: string
+          customer_name: string
+          id?: string
+          notes?: string | null
+          period: string
+          source?: string
+          units_sold?: number
+          updated_at?: string
+        }
+        Update: {
+          branch_name?: string | null
+          created_at?: string
+          customer_name?: string
+          id?: string
+          notes?: string | null
+          period?: string
+          source?: string
+          units_sold?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       suppressed_emails: {
         Row: {
           created_at: string
