@@ -25,7 +25,7 @@ export default function Dashboard() {
   // Initialize state from URL params
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [clientFilter, setClientFilter] = useState<ClientFilter>(() => searchParams.get("client") || "all");
-  const [alertsOnly, setAlertsOnly] = useState(() => searchParams.get("alerts") === "1");
+  const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
@@ -35,10 +35,10 @@ export default function Dashboard() {
     const params = new URLSearchParams();
     if (search) params.set("q", search);
     if (clientFilter !== "all") params.set("client", clientFilter);
-    if (alertsOnly) params.set("alerts", "1");
     if (stateFilter !== "all") params.set("state", stateFilter);
     setSearchParams(params, { replace: true });
-  }, [search, clientFilter, alertsOnly, stateFilter, setSearchParams]);
+    setSearchParams(params, { replace: true });
+  }, [search, clientFilter, stateFilter, setSearchParams]);
   const { data: devices = [], isLoading, refetch } = useDevices();
   const { data: lastCutDates } = useLastCutDates();
   const { data: avgDailyCuts } = useAvgDailyCuts();
