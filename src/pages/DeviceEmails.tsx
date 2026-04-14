@@ -24,19 +24,22 @@ export default function DeviceEmails() {
   );
 
   // Apply filters
+  // Scope by client first (same as Dashboard)
+  const scopedDevices = useMemo(() => {
+    if (clientFilter === "all") return nonStockDevices;
+    return nonStockDevices.filter((d) => (d.customer_name || "Sin cliente") === clientFilter);
+  }, [nonStockDevices, clientFilter]);
+
   const filtered = useMemo(() => {
-    return nonStockDevices.filter((d) => {
-      if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
-      if (clientFilter !== "all" && (d.customer_name || "Sin cliente") !== clientFilter) return false;
-      return true;
-    });
-  }, [nonStockDevices, stateFilter, clientFilter, lastCutDates]);
+    if (stateFilter === "all") return scopedDevices;
+    return scopedDevices.filter((d) => getDeviceState(d, lastCutDates) === stateFilter);
+  }, [scopedDevices, stateFilter, lastCutDates]);
 
   const stateCounts = useMemo(() => {
     const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0 };
-    nonStockDevices.forEach((d) => { counts[getDeviceState(d, lastCutDates)]++; });
+    scopedDevices.forEach((d) => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
-  }, [nonStockDevices, lastCutDates]);
+  }, [scopedDevices, lastCutDates]);
 
   const clients = useMemo(() => {
     const map = new Map<string, number>();
@@ -123,7 +126,7 @@ export default function DeviceEmails() {
         <div className="mb-4 flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             <FilterBtn active={stateFilter === "all"} onClick={() => setStateFilter("all")}>
-              Todos ({nonStockDevices.length})
+              Todos ({scopedDevices.length})
             </FilterBtn>
             <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
               <Activity className="mr-1 inline h-3.5 w-3.5" />
