@@ -396,8 +396,8 @@ export default function AttachRate() {
                               <span className="font-medium truncate">{titleCase(b.branchName)}</span>
                             </div>
                           </td>
-                          <td className="py-2 px-2 text-right tabular-nums">{b.totalCuts.toLocaleString("es-AR")}</td>
-                          <td className="py-2 px-2 text-right tabular-nums">
+                          <td className="py-2 px-2 text-right tabular-nums font-medium">{b.totalCuts.toLocaleString("es-AR")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums font-medium">
                             {b.totalSold > 0 ? b.totalSold.toLocaleString("es-AR") : <span className="text-muted-foreground/50">—</span>}
                           </td>
                           <td className="py-2 px-2 text-right">
