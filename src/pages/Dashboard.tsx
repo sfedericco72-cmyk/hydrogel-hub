@@ -132,6 +132,13 @@ export default function Dashboard() {
               {syncing ? "Sincronizando..." : "Sincronizar"}
             </button>
             <button
+              onClick={() => navigate(`/attach-rate${clientFilter !== "all" ? `?client=${encodeURIComponent(clientFilter)}` : ""}`)}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Attach Rate
+            </button>
+            <button
               onClick={() => navigate("/emails")}
               className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
             >
