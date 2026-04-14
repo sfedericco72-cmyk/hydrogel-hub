@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
   for (const device of devices) {
     // Skip stock devices
     if (!device.branch_name || device.branch_name === device.fixno) continue
-    // Skip devices without alert email
-    if (!device.alert_email) continue
+    // Flag for missing email — we'll check alerts and notify Santiago if needed
+    const hasAlertEmail = !!device.alert_email
 
     // --- Calculate avg daily cuts ---
     const { data: history } = await supabase
