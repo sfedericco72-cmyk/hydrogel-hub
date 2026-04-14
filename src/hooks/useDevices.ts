@@ -91,6 +91,40 @@ export function useAvgDailyCuts() {
   });
 }
 
+/**
+ * Map of fixno → Map<"YYYY-MM", totalCuts>
+ * Fetches last 3 months of cuts data for all devices.
+ */
+export function useMonthlyCutsMap() {
+  return useQuery({
+    queryKey: ["monthly-cuts-map"],
+    queryFn: async () => {
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      threeMonthsAgo.setDate(1);
+      const dateStr = threeMonthsAgo.toISOString().split("T")[0];
+
+      const { data, error } = await supabase
+        .from("device_cuts_history")
+        .select("fixno, cut_date, daily_cuts")
+        .gt("daily_cuts", 0)
+        .gte("cut_date", dateStr);
+
+      if (error) throw error;
+
+      // fixno → Map<"YYYY-MM", totalCuts>
+      const result = new Map<string, Map<string, number>>();
+      data?.forEach((r) => {
+        const month = r.cut_date.substring(0, 7);
+        if (!result.has(r.fixno)) result.set(r.fixno, new Map());
+        const deviceMap = result.get(r.fixno)!;
+        deviceMap.set(month, (deviceMap.get(month) ?? 0) + (r.daily_cuts ?? 0));
+      });
+      return result;
+    },
+  });
+}
+
 const LOW_STOCK_DAYS = 7;
 
 /** Calculate estimated days of stock remaining */
@@ -110,11 +144,11 @@ export function hasLowStock(
   avgDailyCuts: Map<string, number> | undefined
 ): boolean {
   const days = getDaysOfStock(device, avgDailyCuts);
-  if (days === null) return (device.remaining_cuts ?? 0) <= 10; // fallback if no history
+  if (days === null) return (device.remaining_cuts ?? 0) <= 10;
   return days < LOW_STOCK_DAYS;
 }
 
-export type DeviceState = "stock" | "active" | "disconnected" | "inactive";
+export type DeviceState = "stock" | "active" | "disconnected";
 
 /** Check if device is "en stock" (no name or name equals fixno) */
 export function isStock(device: Device): boolean {
@@ -122,11 +156,10 @@ export function isStock(device: Device): boolean {
 }
 
 /**
- * 4-state classification:
+ * 3-state classification:
  * - stock: no branch_name or branch_name === fixno
- * - active: had cuts in last 2 months
- * - disconnected: no cuts in 2 months AND not online in last 7 days
- * - inactive: no cuts in 2 months BUT was online in last 7 days
+ * - active: had cuts in any of the last 3 months
+ * - disconnected: no cuts in last 3 months
  */
 export function getDeviceState(
   device: Device,
@@ -138,31 +171,37 @@ export function getDeviceState(
     if (!lastCutDates) return true;
     const lastCut = lastCutDates.get(device.fixno);
     if (!lastCut) return false;
-    const twoMonthsAgo = new Date();
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    return new Date(lastCut) >= twoMonthsAgo;
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    return new Date(lastCut) >= threeMonthsAgo;
   })();
 
-  if (hasCutsRecently) return "active";
-
-  // No cuts in 2 months — check connectivity
-  const wasOnlineRecently = (() => {
-    if (!device.latest_online_time) return false;
-    const lastOnline = new Date(device.latest_online_time);
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    return lastOnline >= sevenDaysAgo;
-  })();
-
-  return wasOnlineRecently ? "inactive" : "disconnected";
+  return hasCutsRecently ? "active" : "disconnected";
 }
 
 export const DEVICE_STATE_LABELS: Record<DeviceState, string> = {
   stock: "En stock",
   active: "Activo",
   disconnected: "Desconectado",
-  inactive: "Inactivo",
 };
+
+/**
+ * Connection level based on latest_online_time:
+ * - green: last 7 days
+ * - yellow: last 14 days
+ * - red: more than 14 days or never
+ */
+export type ConnectionLevel = "green" | "yellow" | "red";
+
+export function getConnectionLevel(device: Device): ConnectionLevel {
+  if (!device.latest_online_time) return "red";
+  const last = new Date(device.latest_online_time);
+  const now = new Date();
+  const diffDays = (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24);
+  if (diffDays <= 7) return "green";
+  if (diffDays <= 14) return "yellow";
+  return "red";
+}
 
 export function isOnline(device: Device): boolean {
   if (!device.latest_online_time) return false;
