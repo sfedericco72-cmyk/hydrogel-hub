@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown } from "lucide-react";
-import { useDevices, useMonthlyCutsMap } from "@/hooks/useDevices";
+import { ArrowLeft, Plus, Trash2, TrendingUp, Smartphone, Scissors, ChevronDown, Building2 } from "lucide-react";
+import { useDevices, useMonthlyCutsMap, isStock } from "@/hooks/useDevices";
 import { useEquipmentSales, useUpsertEquipmentSale, useDeleteEquipmentSale } from "@/hooks/useEquipmentSales";
 import { toast } from "sonner";
 
@@ -21,6 +21,22 @@ function formatMonth(yyyymm: string): string {
   return `${names[parseInt(m) - 1]} ${y.slice(2)}`;
 }
 
+function rateColorClass(rate: number | null): string {
+  if (rate === null) return "text-muted-foreground/50";
+  if (rate >= 80) return "text-emerald-400";
+  if (rate >= 50) return "text-amber-400";
+  return "text-red-400";
+}
+
+function rateBadgeClass(rate: number | null): string {
+  if (rate === null) return "";
+  if (rate >= 80) return "bg-emerald-500/20 text-emerald-400";
+  if (rate >= 50) return "bg-amber-500/20 text-amber-400";
+  return "bg-red-500/20 text-red-400";
+}
+
+type ViewMode = "consolidado" | "sucursales";
+
 export default function AttachRate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -28,10 +44,11 @@ export default function AttachRate() {
 
   const [selectedClient, setSelectedClient] = useState(initialClient);
   const [showForm, setShowForm] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("consolidado");
 
   const { data: devices = [] } = useDevices();
   const { data: monthlyCutsMap } = useMonthlyCutsMap(12);
-  const { data: sales = [], isLoading: salesLoading } = useEquipmentSales(selectedClient);
+  const { data: sales = [] } = useEquipmentSales(selectedClient);
   const upsertSale = useUpsertEquipmentSale();
   const deleteSale = useDeleteEquipmentSale();
 
@@ -43,28 +60,28 @@ export default function AttachRate() {
     return Array.from(set).sort();
   }, [devices]);
 
-  // Map: month → total láminas cortadas (filtered by client)
+  // Filtered devices for current client
+  const clientDevices = useMemo(() => {
+    if (selectedClient === "all") return devices.filter(d => !isStock(d));
+    return devices.filter(d => d.customer_name === selectedClient && !isStock(d));
+  }, [devices, selectedClient]);
+
+  const clientDeviceFixnos = useMemo(() => new Set(clientDevices.map(d => d.fixno)), [clientDevices]);
+
+  // Consolidated: month → total cuts
   const cutsPerMonth = useMemo(() => {
     const map = new Map<string, number>();
     if (!monthlyCutsMap) return map;
-
-    const clientDeviceFixnos = new Set(
-      selectedClient === "all"
-        ? devices.map(d => d.fixno)
-        : devices.filter(d => d.customer_name === selectedClient).map(d => d.fixno)
-    );
-
     monthlyCutsMap.forEach((deviceMonths, fixno) => {
       if (!clientDeviceFixnos.has(fixno)) return;
       deviceMonths.forEach((cuts, month) => {
         map.set(month, (map.get(month) ?? 0) + cuts);
       });
     });
-
     return map;
-  }, [monthlyCutsMap, devices, selectedClient]);
+  }, [monthlyCutsMap, clientDeviceFixnos]);
 
-  // Map: month → units sold
+  // Consolidated: month → units sold
   const salesPerMonth = useMemo(() => {
     const map = new Map<string, number>();
     sales.forEach(s => {
@@ -73,7 +90,7 @@ export default function AttachRate() {
     return map;
   }, [sales]);
 
-  // Build attach rate table data
+  // Consolidated table data
   const tableData = useMemo(() => {
     return months.map(month => {
       const cuts = cutsPerMonth.get(month) ?? 0;
@@ -95,7 +112,65 @@ export default function AttachRate() {
     return { totalCuts, totalSold, avgRate, trendRate };
   }, [tableData]);
 
-  // Max bar height reference
+  // Per-branch data: branch_name → { month → cuts }
+  const branchCutsMap = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    if (!monthlyCutsMap) return map;
+    clientDevices.forEach(device => {
+      const branchName = device.branch_name || device.fixno;
+      const deviceMonths = monthlyCutsMap.get(device.fixno);
+      if (!deviceMonths) return;
+      if (!map.has(branchName)) map.set(branchName, new Map());
+      const branchMonths = map.get(branchName)!;
+      deviceMonths.forEach((cuts, month) => {
+        branchMonths.set(month, (branchMonths.get(month) ?? 0) + cuts);
+      });
+    });
+    return map;
+  }, [monthlyCutsMap, clientDevices]);
+
+  // Per-branch sales: branch_name → { month → sold }
+  const branchSalesMap = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    sales.forEach(s => {
+      const key = s.branch_name || "__consolidado__";
+      if (!map.has(key)) map.set(key, new Map());
+      const m = map.get(key)!;
+      m.set(s.period, (m.get(s.period) ?? 0) + s.units_sold);
+    });
+    return map;
+  }, [sales]);
+
+  // Branch summaries for the table
+  const branchSummaries = useMemo(() => {
+    const allBranches = new Set<string>();
+    branchCutsMap.forEach((_, b) => allBranches.add(b));
+    branchSalesMap.forEach((_, b) => { if (b !== "__consolidado__") allBranches.add(b); });
+
+    return Array.from(allBranches).sort().map(branchName => {
+      const cutsMap = branchCutsMap.get(branchName);
+      const salesMap = branchSalesMap.get(branchName);
+      // If no branch-specific sales, use consolidated sales proportionally? No — just show what's loaded
+      const consolidatedSales = branchSalesMap.get("__consolidado__");
+
+      let totalCuts = 0;
+      let totalSold = 0;
+
+      const monthlyData = months.map(month => {
+        const cuts = cutsMap?.get(month) ?? 0;
+        // Branch-specific sales first, fallback to nothing (consolidated is shown at top level)
+        const sold = salesMap?.get(month) ?? 0;
+        totalCuts += cuts;
+        totalSold += sold;
+        const rate = sold > 0 ? (cuts / sold) * 100 : null;
+        return { month, cuts, sold, rate };
+      });
+
+      const avgRate = totalSold > 0 ? (totalCuts / totalSold) * 100 : null;
+      return { branchName, totalCuts, totalSold, avgRate, monthlyData };
+    });
+  }, [branchCutsMap, branchSalesMap, months]);
+
   const maxCuts = Math.max(...tableData.map(d => d.cuts), 1);
   const maxSold = Math.max(...tableData.map(d => d.sold), 1);
 
@@ -115,7 +190,7 @@ export default function AttachRate() {
           </div>
         </div>
 
-        {/* Client selector */}
+        {/* Controls */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="relative">
             <select
@@ -128,6 +203,28 @@ export default function AttachRate() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
+
+          {/* View mode toggle */}
+          <div className="flex rounded-lg border border-input overflow-hidden">
+            <button
+              onClick={() => setViewMode("consolidado")}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === "consolidado" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
+              }`}
+            >
+              Consolidado
+            </button>
+            <button
+              onClick={() => setViewMode("sucursales")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === "sucursales" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-accent"
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              Por sucursal
+            </button>
+          </div>
+
           <button
             onClick={() => setShowForm(prev => !prev)}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -142,6 +239,7 @@ export default function AttachRate() {
           <SalesForm
             clients={clients}
             defaultClient={selectedClient !== "all" ? selectedClient : ""}
+            branches={clientDevices.map(d => d.branch_name || d.fixno)}
             onSubmit={async (data) => {
               try {
                 await upsertSale.mutateAsync(data);
@@ -178,89 +276,156 @@ export default function AttachRate() {
           />
         </div>
 
-        {/* Chart */}
-        <div className="mb-8 rounded-lg border bg-card p-5">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Evolución mensual
-          </h3>
-          <div className="flex items-end gap-1 overflow-x-auto pb-2" style={{ minHeight: 200 }}>
-            {tableData.map(d => {
-              const cutsH = (d.cuts / maxCuts) * 160;
-              const soldH = (d.sold / maxSold) * 160;
-              return (
-                <div key={d.month} className="flex flex-col items-center gap-1 flex-1 min-w-[48px]">
-                  <div className="flex items-end gap-0.5" style={{ height: 170 }}>
-                    <div
-                      className="w-3 rounded-t bg-primary/80 transition-all"
-                      style={{ height: cutsH }}
-                      title={`Láminas: ${d.cuts.toLocaleString("es-AR")}`}
-                    />
-                    <div
-                      className="w-3 rounded-t bg-emerald-500/70 transition-all"
-                      style={{ height: soldH }}
-                      title={`Equipos: ${d.sold.toLocaleString("es-AR")}`}
-                    />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground">{formatMonth(d.month)}</span>
-                  {d.rate !== null && (
-                    <span className={`text-[10px] font-semibold tabular-nums ${
-                      d.rate >= 80 ? "text-emerald-400" : d.rate >= 50 ? "text-amber-400" : "text-red-400"
-                    }`}>
-                      {d.rate.toFixed(0)}%
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-primary/80" /> Láminas</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/70" /> Equipos</span>
-          </div>
-        </div>
+        {viewMode === "consolidado" ? (
+          <>
+            {/* Chart */}
+            <div className="mb-8 rounded-lg border bg-card p-5">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Evolución mensual
+              </h3>
+              <div className="flex items-end gap-1 overflow-x-auto pb-2" style={{ minHeight: 200 }}>
+                {tableData.map(d => {
+                  const cutsH = (d.cuts / maxCuts) * 160;
+                  const soldH = (d.sold / maxSold) * 160;
+                  return (
+                    <div key={d.month} className="flex flex-col items-center gap-1 flex-1 min-w-[48px]">
+                      <div className="flex items-end gap-0.5" style={{ height: 170 }}>
+                        <div
+                          className="w-3 rounded-t bg-primary/80 transition-all"
+                          style={{ height: cutsH }}
+                          title={`Láminas: ${d.cuts.toLocaleString("es-AR")}`}
+                        />
+                        <div
+                          className="w-3 rounded-t bg-emerald-500/70 transition-all"
+                          style={{ height: soldH }}
+                          title={`Equipos: ${d.sold.toLocaleString("es-AR")}`}
+                        />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{formatMonth(d.month)}</span>
+                      {d.rate !== null && (
+                        <span className={`text-[10px] font-semibold tabular-nums ${rateColorClass(d.rate)}`}>
+                          {d.rate.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-primary/80" /> Láminas</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/70" /> Equipos</span>
+              </div>
+            </div>
 
-        {/* Data table */}
-        <div className="rounded-lg border bg-card p-5 overflow-x-auto">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Detalle mensual
-          </h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground">Mes</th>
-                <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Láminas</th>
-                <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Equipos</th>
-                <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Attach Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...tableData].reverse().map(d => (
-                <tr key={d.month} className="border-b border-border/50 last:border-0">
-                  <td className="py-2 pr-4 font-medium">{formatMonth(d.month)}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">{d.cuts.toLocaleString("es-AR")}</td>
-                  <td className="py-2 px-2 text-right tabular-nums">
-                    {d.sold > 0 ? d.sold.toLocaleString("es-AR") : (
-                      <span className="text-muted-foreground/50">—</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 text-right">
-                    {d.rate !== null ? (
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
-                        d.rate >= 80 ? "bg-emerald-500/20 text-emerald-400"
-                        : d.rate >= 50 ? "bg-amber-500/20 text-amber-400"
-                        : "bg-red-500/20 text-red-400"
-                      }`}>
-                        {d.rate.toFixed(1)}%
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground/50">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            {/* Data table */}
+            <div className="rounded-lg border bg-card p-5 overflow-x-auto">
+              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Detalle mensual
+              </h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground">Mes</th>
+                    <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Láminas</th>
+                    <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Equipos</th>
+                    <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Attach Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...tableData].reverse().map(d => (
+                    <tr key={d.month} className="border-b border-border/50 last:border-0">
+                      <td className="py-2 pr-4 font-medium">{formatMonth(d.month)}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{d.cuts.toLocaleString("es-AR")}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">
+                        {d.sold > 0 ? d.sold.toLocaleString("es-AR") : <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {d.rate !== null ? (
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate)}`}>
+                            {d.rate.toFixed(1)}%
+                          </span>
+                        ) : <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          /* Per-branch view */
+          <div className="space-y-4">
+            {branchSummaries.length === 0 ? (
+              <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
+                No hay sucursales activas para este cliente
+              </div>
+            ) : (
+              <>
+                {/* Branch ranking */}
+                <div className="rounded-lg border bg-card p-5 overflow-x-auto">
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    Ranking por sucursal (12 meses)
+                  </h3>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground">Sucursal</th>
+                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Láminas</th>
+                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Equipos</th>
+                        <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Attach Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...branchSummaries]
+                        .sort((a, b) => (b.avgRate ?? -1) - (a.avgRate ?? -1))
+                        .map(b => (
+                        <tr key={b.branchName} className="border-b border-border/50 last:border-0">
+                          <td className="py-2 pr-4">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium truncate">{b.branchName}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums">{b.totalCuts.toLocaleString("es-AR")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">
+                            {b.totalSold > 0 ? b.totalSold.toLocaleString("es-AR") : <span className="text-muted-foreground/50">—</span>}
+                          </td>
+                          <td className="py-2 px-2 text-right">
+                            {b.avgRate !== null ? (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(b.avgRate)}`}>
+                                {b.avgRate.toFixed(1)}%
+                              </span>
+                            ) : <span className="text-muted-foreground/50">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Per-branch monthly detail (expandable) */}
+                {branchSummaries
+                  .sort((a, b) => a.branchName.localeCompare(b.branchName))
+                  .map(b => (
+                  <BranchMonthlyDetail
+                    key={b.branchName}
+                    branchName={b.branchName}
+                    monthlyData={b.monthlyData}
+                    avgRate={b.avgRate}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Tip for loading branch-level sales */}
+            {branchSummaries.some(b => b.totalSold === 0) && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-300">
+                <strong>Tip:</strong> Para ver el attach rate por sucursal, cargá las ventas con el campo "Sucursal" 
+                usando el mismo nombre que aparece en cada equipo. Si cargás ventas sin sucursal, se muestran solo en la vista consolidada.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sales entries list */}
         {sales.length > 0 && (
@@ -301,6 +466,67 @@ export default function AttachRate() {
   );
 }
 
+function BranchMonthlyDetail({ branchName, monthlyData, avgRate }: {
+  branchName: string;
+  monthlyData: { month: string; cuts: number; sold: number; rate: number | null }[];
+  avgRate: number | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const recentMonths = monthlyData.slice(-6);
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <button
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full flex items-center justify-between p-4 hover:bg-accent/30 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <span className="font-semibold">{branchName}</span>
+          {avgRate !== null && (
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(avgRate)}`}>
+              {avgRate.toFixed(1)}%
+            </span>
+          )}
+        </div>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="border-t border-border p-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground">Mes</th>
+                <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Láminas</th>
+                <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Equipos</th>
+                <th className="pb-2 px-2 text-right text-xs font-medium text-muted-foreground">Attach Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...recentMonths].reverse().map(d => (
+                <tr key={d.month} className="border-b border-border/50 last:border-0">
+                  <td className="py-2 pr-4 font-medium">{formatMonth(d.month)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{d.cuts.toLocaleString("es-AR")}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">
+                    {d.sold > 0 ? d.sold.toLocaleString("es-AR") : <span className="text-muted-foreground/50">—</span>}
+                  </td>
+                  <td className="py-2 px-2 text-right">
+                    {d.rate !== null ? (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${rateBadgeClass(d.rate)}`}>
+                        {d.rate.toFixed(1)}%
+                      </span>
+                    ) : <span className="text-muted-foreground/50">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -316,11 +542,13 @@ function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: str
 function SalesForm({
   clients,
   defaultClient,
+  branches,
   onSubmit,
   loading,
 }: {
   clients: string[];
   defaultClient: string;
+  branches: string[];
   onSubmit: (data: { customer_name: string; period: string; units_sold: number; branch_name?: string; notes?: string }) => void;
   loading: boolean;
 }) {
@@ -332,6 +560,8 @@ function SalesForm({
   const [units, setUnits] = useState("");
   const [branch, setBranch] = useState("");
   const [notes, setNotes] = useState("");
+
+  const uniqueBranches = useMemo(() => Array.from(new Set(branches)).sort(), [branches]);
 
   return (
     <div className="mb-6 rounded-lg border bg-card p-5">
@@ -372,13 +602,19 @@ function SalesForm({
         </div>
         <div>
           <label className="mb-1 block text-xs text-muted-foreground">Sucursal (opcional)</label>
-          <input
-            type="text"
-            value={branch}
-            onChange={e => setBranch(e.target.value)}
-            placeholder="Todas"
-            className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              list="branch-options"
+              value={branch}
+              onChange={e => setBranch(e.target.value)}
+              placeholder="Consolidado (todas)"
+              className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <datalist id="branch-options">
+              {uniqueBranches.map(b => <option key={b} value={b} />)}
+            </datalist>
+          </div>
         </div>
       </div>
       <div className="mt-3">
