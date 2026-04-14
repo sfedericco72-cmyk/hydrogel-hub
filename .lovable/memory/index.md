@@ -5,6 +5,7 @@ Spanish-language hydrogel cutting machine monitoring dashboard. Dark theme.
 CutABC API at http://www.cutabc.cn:8091/cut_app/app/ — credentials stored as secrets.
 Lovable Cloud enabled. Devices table synced from CutABC.
 BCC santiago.federico@bitec.cl on ALL alert emails.
+All display names use titleCase() from lib/utils — never show raw uppercase/lowercase from API.
 
 ## Memories
 - [CutABC API](mem://reference/cutabc-api) — Login params, device list endpoint, session handling
