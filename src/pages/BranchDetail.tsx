@@ -302,8 +302,8 @@ export default function BranchDetail() {
                           {tx.transaction_type === "Distribution" ? "Recarga" : tx.transaction_type || "—"}
                         </span>
                       </td>
-                      <td className="py-2 pr-4 text-right font-mono font-semibold text-green-400">
-                        +{tx.quantity.toLocaleString("es-AR")}
+                      <td className={`py-2 pr-4 text-right font-mono font-semibold ${tx.quantity >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        {tx.quantity >= 0 ? "+" : ""}{tx.quantity.toLocaleString("es-AR")}
                       </td>
                       <td className="py-2 pr-4 text-right font-mono text-muted-foreground">
                         {tx.balance_after?.toLocaleString("es-AR") ?? "—"}
