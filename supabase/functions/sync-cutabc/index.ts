@@ -221,12 +221,50 @@ Deno.serve(async (req) => {
     }
     console.log(`Saved ${historyData.length} daily snapshots for ${today} (with daily_cuts)`);
 
+    // 6. Sync transactions from Transaction Flow
+    console.log("Fetching transactions...");
+    const allTransactions = await fetchAllTransactions(sessionId);
+    console.log(`Fetched ${allTransactions.length} transactions`);
+
+    const txData = allTransactions.map((t: Record<string, unknown>) => ({
+      fixno: t.fixno as string,
+      bill_no: t.billno as string,
+      bill_date: t.billdate ? new Date((t.billdate as string).replace(" ", "T")).toISOString() : null,
+      transaction_type: (t.balakindna2 as string || "").trim() || null,
+      quantity: parseInt(t.busiqty2 as string) || 0,
+      balance_after: parseInt(t.balaqty as string) || null,
+      customer_name: (t.branna as string) || null,
+      branch_name: (t.fixna as string) || null,
+      creator: (t.creater as string) || null,
+      remark: (t.remark as string) || null,
+      audit_date: t.auditdt ? new Date((t.auditdt as string).replace(" ", "T")).toISOString() : null,
+      raw_data: t,
+    }));
+
+    let txSynced = 0;
+    if (txData.length > 0) {
+      for (let i = 0; i < txData.length; i += 50) {
+        const chunk = txData.slice(i, i + 50);
+        const { error } = await supabase
+          .from("device_transactions")
+          .upsert(chunk, { onConflict: "fixno,bill_no" });
+
+        if (error) {
+          console.error(`Transaction upsert error at chunk ${i}: ${error.message}`);
+        } else {
+          txSynced += chunk.length;
+        }
+      }
+    }
+    console.log(`Synced ${txSynced} transactions`);
+
     return new Response(
       JSON.stringify({
         success: true,
         total_fetched: allDevices.length,
         active_synced: activeDevices.length,
         history_saved: historyData.length,
+        transactions_synced: txSynced,
         timestamp: new Date().toISOString(),
       }),
       {
