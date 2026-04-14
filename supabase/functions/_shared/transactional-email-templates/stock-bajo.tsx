@@ -1,10 +1,11 @@
 import * as React from 'npm:react@18.3.1'
 import {
-  Body, Container, Head, Heading, Html, Preview, Text, Button, Hr, Section,
+  Body, Container, Head, Heading, Html, Preview, Text, Button, Hr, Section, Img,
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const SITE_NAME = "Bitec"
+const SITE_NAME = "Bitec Hydrogel Hub"
+const LOGO_URL = "https://bitec.cl/wp-content/uploads/2024/10/logo-bitec.svg"
 
 interface StockBajoProps {
   branchName?: string
@@ -19,6 +20,10 @@ const StockBajoEmail = ({ branchName, fixno, remainingCuts, estimatedDays }: Sto
     <Preview>⚠️ Stock bajo en {branchName || 'un equipo'} — quedan {remainingCuts ?? '?'} cortes</Preview>
     <Body style={main}>
       <Container style={container}>
+        <Section style={headerSection}>
+          <Img src={LOGO_URL} alt="Bitec" width="120" height="40" style={logo} />
+        </Section>
+
         <Heading style={h1}>⚠️ Alerta de Stock Bajo</Heading>
         <Text style={text}>
           El equipo <strong>{branchName || fixno || 'Sin nombre'}</strong>
@@ -65,6 +70,8 @@ export const template = {
 
 const main = { backgroundColor: '#ffffff', fontFamily: "'DM Sans', Arial, sans-serif" }
 const container = { padding: '30px 25px', maxWidth: '560px', margin: '0 auto' }
+const headerSection = { textAlign: 'center' as const, marginBottom: '28px', paddingBottom: '20px', borderBottom: '2px solid #e5e7eb' }
+const logo = { margin: '0 auto' }
 const h1 = { fontSize: '22px', fontWeight: 'bold' as const, color: '#1a1a2e', margin: '0 0 20px' }
 const text = { fontSize: '15px', color: '#3a3a4a', lineHeight: '1.6', margin: '0 0 16px' }
 const alertBox = {
