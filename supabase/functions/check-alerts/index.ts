@@ -16,17 +16,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Missing env vars' }), { status: 500 })
   }
 
-  // Auth: accept anon key or service_role key from either env var name
-  const authHeader = req.headers.get('Authorization')
-  const token = authHeader?.replace(/^Bearer\s+/i, '').trim()
-  const validKeys = [
-    Deno.env.get('SUPABASE_ANON_KEY'),
-    Deno.env.get('SUPABASE_PUBLISHABLE_KEY'),
-    supabaseServiceKey,
-  ].filter(Boolean)
-  if (!token || !validKeys.includes(token)) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  }
+  // No manual auth check — verify_jwt = false in config.toml.
+  // Cron job authenticates via service_role key from vault.
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
