@@ -333,6 +333,37 @@ function PdVRow({
             </div>
           )}
 
+          {/* History toggle */}
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <History className="w-3 h-3" />
+            {showHistory ? "Ocultar historial" : "Ver historial de asignaciones"}
+          </button>
+
+          {showHistory && history.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Historial</span>
+              {history.map((a: any) => (
+                <div key={a.id} className="flex items-center justify-between bg-muted/20 rounded px-3 py-2 opacity-60">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm font-mono">{a.devices?.fixno}</span>
+                    <span className="text-xs text-muted-foreground">{a.devices?.customer_name || ""}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Calendar className="w-3 h-3" />
+                    {new Date(a.assigned_at).toLocaleDateString("es-CL")} — {new Date(a.unassigned_at).toLocaleDateString("es-CL")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {showHistory && history.length === 0 && (
+            <p className="text-xs text-muted-foreground italic">Sin historial previo</p>
+          )}
+
           <AssignDeviceDialog open={assignOpen} onClose={() => setAssignOpen(false)} pointOfSaleId={pdv.id} tenantId={tenantId} />
         </div>
       )}
