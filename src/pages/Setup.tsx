@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi } from "lucide-react";
+import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { useTenantSettings, useUpdateTenantSettings } from "@/hooks/useTenantSettings";
+import { useBackfillStatus, useRunBackfill } from "@/hooks/useBackfillHistory";
 import { toast } from "sonner";
 
 export default function Setup() {
@@ -136,6 +137,10 @@ export default function Setup() {
               <NumberField label="Ventana máxima de alertas (días)" value={form.alert_max_window_days} onChange={v => handleChange("alert_max_window_days", v)} min={1} max={60} />
             </div>
           </Section>
+
+          {/* Backfill */}
+          <BackfillSection />
+
         </div>
       </div>
     </div>
@@ -181,5 +186,103 @@ function NumberField({ label, value, onChange, min, max, color }: { label: strin
         className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       />
     </div>
+  );
+}
+
+function BackfillSection() {
+  const { data: records = [], isLoading } = useBackfillStatus();
+  const runBackfill = useRunBackfill();
+  const [loadingPeriod, setLoadingPeriod] = useState<string | null>(null);
+
+  // Generate last 12 months
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = 1; i <= 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.toISOString().substring(0, 7));
+  }
+
+  const statusMap = new Map(records.map(r => [r.period, r]));
+
+  async function handleBackfill(period: string) {
+    setLoadingPeriod(period);
+    try {
+      const result = await runBackfill.mutateAsync(period);
+      toast.success(`${period}: ${result.records} registros cargados desde ${result.transactions} transacciones`);
+    } catch (e: any) {
+      toast.error(`Error ${period}: ${e.message}`);
+    } finally {
+      setLoadingPeriod(null);
+    }
+  }
+
+  const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  function formatPeriod(p: string) {
+    const [y, m] = p.split("-");
+    return `${monthNames[parseInt(m) - 1]} ${y}`;
+  }
+
+  return (
+    <Section icon={<Database className="h-4 w-4" />} title="Carga histórica de cortes">
+      <p className="text-xs text-muted-foreground mb-4">
+        Descarga las transacciones de CutABC mes a mes para reconstruir el historial de cortes diarios.
+        La API permite máximo 30 días por consulta.
+      </p>
+      {isLoading ? (
+        <div className="h-20 animate-pulse rounded bg-muted" />
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {months.map(period => {
+            const record = statusMap.get(period);
+            const status = record?.status;
+            const isCurrentlyLoading = loadingPeriod === period;
+
+            return (
+              <div
+                key={period}
+                className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
+                  status === "done" ? "border-emerald-500/30 bg-emerald-500/5" :
+                  status === "error" ? "border-red-500/30 bg-red-500/5" :
+                  status === "loading" || isCurrentlyLoading ? "border-amber-500/30 bg-amber-500/5" :
+                  "border-border"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {status === "done" ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  ) : status === "error" ? (
+                    <AlertCircle className="h-4 w-4 text-red-400" />
+                  ) : isCurrentlyLoading ? (
+                    <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="font-medium">{formatPeriod(period)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {status === "done" && record && (
+                    <span className="text-xs text-muted-foreground">{record.records_loaded} reg.</span>
+                  )}
+                  {status === "error" && (
+                    <span className="text-xs text-red-400" title={record?.error_message || ""}>Error</span>
+                  )}
+                  <button
+                    onClick={() => handleBackfill(period)}
+                    disabled={isCurrentlyLoading || loadingPeriod !== null}
+                    className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                      status === "done"
+                        ? "bg-secondary text-muted-foreground hover:bg-accent"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    } disabled:opacity-50`}
+                  >
+                    {isCurrentlyLoading ? "Cargando..." : status === "done" ? "Recargar" : "Cargar"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Section>
   );
 }
