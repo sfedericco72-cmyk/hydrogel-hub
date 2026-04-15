@@ -488,9 +488,14 @@ export default function ClientsManager() {
               <p className="text-sm text-muted-foreground">Gestiona la estructura Cliente → Punto de Venta → Equipos</p>
             </div>
           </div>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" /> Nuevo Cliente
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" /> Importar
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Nuevo Cliente
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -503,10 +508,15 @@ export default function ClientsManager() {
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
               <h2 className="text-lg font-semibold mb-2">Sin clientes</h2>
-              <p className="text-sm text-muted-foreground mb-4">Creá tu primer cliente para empezar a organizar los puntos de venta y equipos.</p>
-              <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Crear primer cliente
-              </Button>
+              <p className="text-sm text-muted-foreground mb-4">Creá tu primer cliente o importalos desde un archivo CSV/Excel.</p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setImportOpen(true)}>
+                  <Upload className="w-4 h-4 mr-2" /> Importar
+                </Button>
+                <Button onClick={() => setCreateOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" /> Crear primer cliente
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -518,6 +528,14 @@ export default function ClientsManager() {
 
       {createOpen && tenant && (
         <ClientDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenant.id} />
+      )}
+      {importOpen && tenant && (
+        <ImportClientsDialog
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          tenantId={tenant.id}
+          existingNames={clients.map((c) => c.name)}
+        />
       )}
     </div>
   );
