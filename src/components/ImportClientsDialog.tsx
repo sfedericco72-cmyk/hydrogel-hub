@@ -201,7 +201,7 @@ export function ImportClientsDialog({
                     <TableRow key={i} className={c.duplicate ? "opacity-40" : ""}>
                       <TableCell>
                         {c.duplicate ? (
-                          <AlertCircle className="w-4 h-4 text-yellow-400" title="Ya existe" />
+                          <AlertCircle className="w-4 h-4 text-status-warning" />
                         ) : (
                           <Check className="w-4 h-4 text-green-400" />
                         )}
