@@ -19,8 +19,8 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   const token = authHeader?.replace(/^Bearer\s+/i, '').trim()
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY')
+  console.log('Auth debug', { tokenLast10: token?.slice(-10), anonKeyLast10: anonKey?.slice(-10), match: token === anonKey })
   if (!token || (token !== anonKey && token !== supabaseServiceKey)) {
-    console.error('Auth failed', { hasToken: !!token, hasAnonKey: !!anonKey, tokenPrefix: token?.slice(0, 20) })
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
