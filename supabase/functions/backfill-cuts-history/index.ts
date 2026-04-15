@@ -31,7 +31,7 @@ async function fetchTransactionsForPeriod(
 ): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   let pageIndex = 1;
-  const pageSize = 100;
+  const pageSize = 500;
 
   while (true) {
     const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
