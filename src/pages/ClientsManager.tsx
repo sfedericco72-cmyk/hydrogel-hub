@@ -37,13 +37,14 @@ function ClientDialog({
   open: boolean;
   onClose: () => void;
   tenantId: string;
-  editClient?: { id: string; code: string | null; name: string; contact_name: string | null; contact_phone: string | null; contact_email: string | null } | null;
+  editClient?: { id: string; code: string | null; name: string; contact_name: string | null; contact_phone: string | null; contact_email: string | null; address: string | null; latitude: number | null; longitude: number | null } | null;
 }) {
   const [code, setCode] = useState(editClient?.code || "");
   const [name, setName] = useState(editClient?.name || "");
   const [contactName, setContactName] = useState(editClient?.contact_name || "");
   const [contactPhone, setContactPhone] = useState(editClient?.contact_phone || "");
   const [contactEmail, setContactEmail] = useState(editClient?.contact_email || "");
+  const [address, setAddress] = useState(editClient?.address || "");
   const create = useCreateClient();
   const update = useUpdateClient();
   const isEdit = !!editClient;
@@ -55,6 +56,16 @@ function ClientDialog({
       return;
     }
     try {
+      // Parse coordinates from address if it looks like Google Maps coords
+      const addrTrimmed = address.trim();
+      let lat: number | null = null;
+      let lng: number | null = null;
+      const coordMatch = addrTrimmed.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+      if (coordMatch) {
+        lat = parseFloat(coordMatch[1]);
+        lng = parseFloat(coordMatch[2]);
+      }
+
       if (isEdit) {
         await update.mutateAsync({
           id: editClient.id,
@@ -63,6 +74,9 @@ function ClientDialog({
           contact_name: contactName.trim() || null,
           contact_phone: contactPhone.trim() || null,
           contact_email: contactEmail.trim() || null,
+          address: addrTrimmed || null,
+          latitude: lat ?? editClient.latitude,
+          longitude: lng ?? editClient.longitude,
         });
         toast.success("Cliente actualizado");
       } else {
@@ -73,6 +87,9 @@ function ClientDialog({
           contact_name: contactName.trim() || null,
           contact_phone: contactPhone.trim() || null,
           contact_email: contactEmail.trim() || null,
+          address: addrTrimmed || null,
+          latitude: lat,
+          longitude: lng,
         });
         toast.success("Cliente creado");
       }
@@ -112,6 +129,11 @@ function ClientDialog({
               <Label>Email</Label>
               <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="email@..." maxLength={255} type="email" />
             </div>
+          </div>
+          <div>
+            <Label>Domicilio</Label>
+            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección o coordenadas de Google Maps (-33.45, -70.66)" maxLength={500} />
+            <p className="text-xs text-muted-foreground mt-1">Podés pegar la dirección o coordenadas desde Google Maps</p>
           </div>
         </div>
         <DialogFooter>

@@ -15,6 +15,7 @@ interface ParsedClient {
   contact_name: string;
   contact_phone: string;
   contact_email: string;
+  address: string;
   duplicate?: boolean;
 }
 
@@ -41,6 +42,12 @@ const COLUMN_MAP: Record<string, keyof ParsedClient> = {
   correo: "contact_email",
   mail: "contact_email",
   contact_email: "contact_email",
+  domicilio: "address",
+  direccion: "address",
+  dirección: "address",
+  address: "address",
+  ubicacion: "address",
+  ubicación: "address",
 };
 
 function normalizeHeader(h: string): string {
@@ -71,7 +78,7 @@ function parseRows(sheet: XLSX.WorkSheet): ParsedClient[] {
 
   return json
     .map((row) => {
-      const client: ParsedClient = { code: "", name: "", contact_name: "", contact_phone: "", contact_email: "" };
+      const client: ParsedClient = { code: "", name: "", contact_name: "", contact_phone: "", contact_email: "", address: "" };
       for (const [key, field] of Object.entries(mapping)) {
         const val = String(row[key] ?? "").trim();
         if (val) (client as any)[field] = val;
@@ -133,14 +140,26 @@ export function ImportClientsDialog({
     if (!newClients.length) return;
     setImporting(true);
     try {
-      const inserts = newClients.map((c) => ({
-        tenant_id: tenantId,
-        code: c.code || null,
-        name: c.name,
-        contact_name: c.contact_name || null,
-        contact_phone: c.contact_phone || null,
-        contact_email: c.contact_email || null,
-      }));
+      const inserts = newClients.map((c) => {
+        let lat: number | null = null;
+        let lng: number | null = null;
+        const coordMatch = c.address.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+        if (coordMatch) {
+          lat = parseFloat(coordMatch[1]);
+          lng = parseFloat(coordMatch[2]);
+        }
+        return {
+          tenant_id: tenantId,
+          code: c.code || null,
+          name: c.name,
+          contact_name: c.contact_name || null,
+          contact_phone: c.contact_phone || null,
+          contact_email: c.contact_email || null,
+          address: c.address || null,
+          latitude: lat,
+          longitude: lng,
+        };
+      });
       const { error } = await supabase.from("clients").insert(inserts);
       if (error) throw error;
       toast.success(`${newClients.length} clientes importados`);
@@ -155,10 +174,10 @@ export function ImportClientsDialog({
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ["Código", "Nombre", "Contacto", "Teléfono", "Email"],
-      ["CLI-001", "Empresa Ejemplo S.A.", "Juan Pérez", "+1 555 1234", "juan@ejemplo.com"],
+      ["Código", "Nombre", "Contacto", "Teléfono", "Email", "Domicilio"],
+      ["CLI-001", "Empresa Ejemplo S.A.", "Juan Pérez", "+1 555 1234", "juan@ejemplo.com", "Av. Principal 123, Ciudad"],
     ]);
-    ws["!cols"] = [{ wch: 12 }, { wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 28 }];
+    ws["!cols"] = [{ wch: 12 }, { wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 28 }, { wch: 35 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Clientes");
     XLSX.writeFile(wb, "plantilla_clientes.xlsx");
@@ -180,7 +199,7 @@ export function ImportClientsDialog({
               Subí un archivo CSV o Excel (.xlsx) con tus clientes. Las columnas se mapean automáticamente.
             </p>
             <p className="text-xs text-muted-foreground">
-              Columnas reconocidas: <span className="font-mono">código/cod, nombre/cliente/razón_social, contacto, teléfono, email/correo</span>
+              Columnas reconocidas: <span className="font-mono">código/cod, nombre/cliente/razón_social, contacto, teléfono, email/correo, domicilio/dirección</span>
             </p>
 
             <div className="flex items-center gap-3">
@@ -221,9 +240,10 @@ export function ImportClientsDialog({
                     <TableHead>Nombre</TableHead>
                     <TableHead>Contacto</TableHead>
                     <TableHead>Teléfono</TableHead>
-                    <TableHead>Email</TableHead>
-                  </TableRow>
-                </TableHeader>
+                     <TableHead>Email</TableHead>
+                     <TableHead>Domicilio</TableHead>
+                   </TableRow>
+                 </TableHeader>
                 <TableBody>
                   {parsed.map((c, i) => (
                     <TableRow key={i} className={c.duplicate ? "opacity-40" : ""}>
@@ -239,6 +259,7 @@ export function ImportClientsDialog({
                       <TableCell className="text-sm">{c.contact_name}</TableCell>
                       <TableCell className="text-sm">{c.contact_phone}</TableCell>
                       <TableCell className="text-sm">{c.contact_email}</TableCell>
+                      <TableCell className="text-sm truncate max-w-[150px]">{c.address}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
