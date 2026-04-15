@@ -23,7 +23,6 @@ const COLUMN_MAP: Record<string, keyof ParsedClient> = {
   código: "code",
   code: "code",
   cod: "code",
-  rut: "code",
   id_cliente: "code",
   nombre: "name",
   cliente: "name",
@@ -170,7 +169,7 @@ export function ImportClientsDialog({
               Subí un archivo CSV o Excel (.xlsx) con tus clientes. Las columnas se mapean automáticamente.
             </p>
             <p className="text-xs text-muted-foreground">
-              Columnas reconocidas: <span className="font-mono">código/cod/rut, nombre/cliente/razón_social, contacto, teléfono/fono, email/correo</span>
+              Columnas reconocidas: <span className="font-mono">código/cod, nombre/cliente/razón_social, contacto, teléfono, email/correo</span>
             </p>
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mb-2" />
