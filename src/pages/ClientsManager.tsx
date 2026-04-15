@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug, Upload, History, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +19,12 @@ import {
   useUpdatePointOfSale,
   useDeletePointOfSale,
   useDeviceAssignments,
+  useDeviceAssignmentHistory,
   useAssignDevice,
   useUnassignDevice,
   useUnassignedDevices,
 } from "@/hooks/useClients";
+import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 
 // ── Client Form Dialog ──────────────────────────────────
 
