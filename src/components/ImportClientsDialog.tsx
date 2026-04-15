@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 
 interface ParsedClient {
+  code: string;
   name: string;
   contact_name: string;
   contact_phone: string;
@@ -18,11 +19,18 @@ interface ParsedClient {
 }
 
 const COLUMN_MAP: Record<string, keyof ParsedClient> = {
+  codigo: "code",
+  código: "code",
+  code: "code",
+  cod: "code",
+  rut: "code",
+  id_cliente: "code",
   nombre: "name",
   cliente: "name",
   name: "name",
   razón_social: "name",
   razon_social: "name",
+  nombre_cliente: "name",
   contacto: "contact_name",
   contact_name: "contact_name",
   nombre_contacto: "contact_name",
@@ -64,7 +72,7 @@ function parseRows(sheet: XLSX.WorkSheet): ParsedClient[] {
 
   return json
     .map((row) => {
-      const client: ParsedClient = { name: "", contact_name: "", contact_phone: "", contact_email: "" };
+      const client: ParsedClient = { code: "", name: "", contact_name: "", contact_phone: "", contact_email: "" };
       for (const [key, field] of Object.entries(mapping)) {
         const val = String(row[key] ?? "").trim();
         if (val) (client as any)[field] = val;
@@ -128,6 +136,7 @@ export function ImportClientsDialog({
     try {
       const inserts = newClients.map((c) => ({
         tenant_id: tenantId,
+        code: c.code || null,
         name: c.name,
         contact_name: c.contact_name || null,
         contact_phone: c.contact_phone || null,
@@ -161,7 +170,7 @@ export function ImportClientsDialog({
               Subí un archivo CSV o Excel (.xlsx) con tus clientes. Las columnas se mapean automáticamente.
             </p>
             <p className="text-xs text-muted-foreground">
-              Columnas reconocidas: <span className="font-mono">nombre/cliente/razón_social, contacto, teléfono/fono, email/correo</span>
+              Columnas reconocidas: <span className="font-mono">código/cod/rut, nombre/cliente/razón_social, contacto, teléfono/fono, email/correo</span>
             </p>
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mb-2" />
@@ -190,6 +199,7 @@ export function ImportClientsDialog({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8"></TableHead>
+                    <TableHead>Código</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Contacto</TableHead>
                     <TableHead>Teléfono</TableHead>
@@ -206,6 +216,7 @@ export function ImportClientsDialog({
                           <Check className="w-4 h-4 text-green-400" />
                         )}
                       </TableCell>
+                      <TableCell className="text-sm font-mono">{c.code}</TableCell>
                       <TableCell className="font-medium">{c.name}</TableCell>
                       <TableCell className="text-sm">{c.contact_name}</TableCell>
                       <TableCell className="text-sm">{c.contact_phone}</TableCell>

@@ -37,8 +37,9 @@ function ClientDialog({
   open: boolean;
   onClose: () => void;
   tenantId: string;
-  editClient?: { id: string; name: string; contact_name: string | null; contact_phone: string | null; contact_email: string | null } | null;
+  editClient?: { id: string; code: string | null; name: string; contact_name: string | null; contact_phone: string | null; contact_email: string | null } | null;
 }) {
+  const [code, setCode] = useState(editClient?.code || "");
   const [name, setName] = useState(editClient?.name || "");
   const [contactName, setContactName] = useState(editClient?.contact_name || "");
   const [contactPhone, setContactPhone] = useState(editClient?.contact_phone || "");
@@ -57,6 +58,7 @@ function ClientDialog({
       if (isEdit) {
         await update.mutateAsync({
           id: editClient.id,
+          code: code.trim() || null,
           name: trimmed,
           contact_name: contactName.trim() || null,
           contact_phone: contactPhone.trim() || null,
@@ -66,6 +68,7 @@ function ClientDialog({
       } else {
         await create.mutateAsync({
           tenant_id: tenantId,
+          code: code.trim() || null,
           name: trimmed,
           contact_name: contactName.trim() || null,
           contact_phone: contactPhone.trim() || null,
@@ -86,9 +89,15 @@ function ClientDialog({
           <DialogTitle>{isEdit ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label>Nombre *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del cliente" maxLength={100} />
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label>Código</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ej: CLI-001" maxLength={30} />
+            </div>
+            <div className="col-span-2">
+              <Label>Nombre *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del cliente" maxLength={100} />
+            </div>
           </div>
           <div>
             <Label>Contacto</Label>
@@ -389,7 +398,10 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
           <div className="flex items-center gap-3">
             {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
             <Building2 className="w-5 h-5 text-primary" />
-            <CardTitle className="text-base">{client.name}</CardTitle>
+            <div className="flex items-center gap-2">
+              {client.code && <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{client.code}</span>}
+              <CardTitle className="text-base">{client.name}</CardTitle>
+            </div>
           </div>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditOpen(true)}>
