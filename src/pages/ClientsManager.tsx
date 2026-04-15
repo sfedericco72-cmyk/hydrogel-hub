@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug, Upload, History, Calendar } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug, Upload, History, Calendar, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -286,40 +286,43 @@ function AssignDeviceDialog({
         <DialogHeader>
           <DialogTitle>Asignar Equipo</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-3">
           {unassigned.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay equipos disponibles para asignar.</p>
           ) : (
-            <div className="space-y-3">
-              <div>
-                <Label>Buscar equipo</Label>
+            <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar por ID o nombre..."
+                  onChange={(e) => { setSearch(e.target.value); setSelectedDeviceId(""); }}
+                  placeholder="Buscar por ID o nombre del equipo..."
+                  className="pl-9"
                   autoFocus
                 />
               </div>
-              <div>
-                <Label>Equipo disponible {filtered.length !== unassigned.length && <span className="text-muted-foreground font-normal">({filtered.length} de {unassigned.length})</span>}</Label>
-                <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar equipo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filtered.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">Sin resultados</div>
-                    ) : (
-                      filtered.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.fixno} — {d.customer_name || d.branch_name || "Sin nombre"}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+              <div className="max-h-60 overflow-y-auto rounded-md border border-border">
+                {filtered.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-muted-foreground text-center">Sin resultados</p>
+                ) : (
+                  filtered.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent ${selectedDeviceId === d.id ? "bg-accent text-accent-foreground" : ""}`}
+                      onClick={() => setSelectedDeviceId(d.id)}
+                    >
+                      <Cpu className="w-3.5 h-3.5 shrink-0 text-primary" />
+                      <span className="font-mono">{d.fixno}</span>
+                      <span className="text-muted-foreground truncate">— {d.customer_name || d.branch_name || "Sin nombre"}</span>
+                    </button>
+                  ))
+                )}
               </div>
-            </div>
+              {filtered.length > 0 && (
+                <p className="text-xs text-muted-foreground">{filtered.length} equipo{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}</p>
+              )}
+            </>
           )}
         </div>
         <DialogFooter>
