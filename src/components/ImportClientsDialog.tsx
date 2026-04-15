@@ -153,7 +153,17 @@ export function ImportClientsDialog({
     }
   };
 
-  return (
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Código", "Nombre", "Contacto", "Teléfono", "Email"],
+      ["CLI-001", "Empresa Ejemplo S.A.", "Juan Pérez", "+1 555 1234", "juan@ejemplo.com"],
+    ]);
+    ws["!cols"] = [{ wch: 12 }, { wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 28 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+    XLSX.writeFile(wb, "plantilla_clientes.xlsx");
+  };
+
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
