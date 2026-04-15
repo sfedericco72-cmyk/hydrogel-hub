@@ -398,7 +398,10 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
           <div className="flex items-center gap-3">
             {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
             <Building2 className="w-5 h-5 text-primary" />
-            <CardTitle className="text-base">{client.name}</CardTitle>
+            <div className="flex items-center gap-2">
+              {client.code && <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{client.code}</span>}
+              <CardTitle className="text-base">{client.name}</CardTitle>
+            </div>
           </div>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditOpen(true)}>
