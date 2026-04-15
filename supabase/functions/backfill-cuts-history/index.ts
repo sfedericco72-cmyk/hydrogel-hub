@@ -29,39 +29,54 @@ async function fetchTransactionsForPeriod(
   from: string,
   to: string
 ): Promise<Record<string, unknown>[]> {
-  const all: Record<string, unknown>[] = [];
-  let pageIndex = 1;
-  const pageSize = 500;
+  // First request to get total count
+  const firstRes = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
+    body: new URLSearchParams({
+      itemno: "fixbalaqty",
+      data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
+      pageindex: "1",
+      pagesize: "1000",
+    }),
+  });
+  const firstData = await firstRes.json();
+  if (firstData.success !== "1" || !firstData.listTask) return [];
 
-  while (true) {
-    const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        sessionId,
-      },
-      body: new URLSearchParams({
-        itemno: "fixbalaqty",
-        data: JSON.stringify([
-          { billdate_beg: from },
-          { billdate_end: to },
-          { branna: "" },
-          { fixno: "" },
-        ]),
-        pageindex: String(pageIndex),
-        pagesize: String(pageSize),
-      }),
-    });
+  const total = parseInt(firstData.reccnt);
+  const all: Record<string, unknown>[] = [...firstData.listTask];
+  console.log(`Page 1: fetched ${all.length}/${total}`);
 
-    const data = await res.json();
-    if (data.success !== "1" || !data.listTask) break;
+  if (all.length >= total) return all;
 
-    all.push(...data.listTask);
-    const total = parseInt(data.reccnt);
-    console.log(`Page ${pageIndex}: fetched ${all.length}/${total}`);
-    if (all.length >= total) break;
-    pageIndex++;
+  // Fetch remaining pages in parallel
+  const pageSize = 1000;
+  const remainingPages = Math.ceil((total - pageSize) / pageSize);
+  const promises = [];
+  for (let i = 0; i < remainingPages; i++) {
+    const pageIndex = i + 2;
+    promises.push(
+      fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
+        body: new URLSearchParams({
+          itemno: "fixbalaqty",
+          data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
+          pageindex: String(pageIndex),
+          pagesize: String(pageSize),
+        }),
+      }).then(r => r.json()).then(d => {
+        if (d.success === "1" && d.listTask) {
+          console.log(`Page ${pageIndex}: fetched ${d.listTask.length}`);
+          return d.listTask as Record<string, unknown>[];
+        }
+        return [];
+      })
+    );
   }
+
+  const results = await Promise.all(promises);
+  for (const r of results) all.push(...r);
 
   return all;
 }
