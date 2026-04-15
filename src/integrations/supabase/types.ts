@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      clients: {
+        Row: {
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cuts_history_backfill: {
         Row: {
           completed_at: string | null
@@ -49,6 +90,51 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      device_assignments: {
+        Row: {
+          assigned_at: string
+          created_at: string
+          device_id: string
+          id: string
+          point_of_sale_id: string
+          unassigned_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          created_at?: string
+          device_id: string
+          id?: string
+          point_of_sale_id: string
+          unassigned_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          point_of_sale_id?: string
+          unassigned_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_assignments_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_assignments_point_of_sale_id_fkey"
+            columns: ["point_of_sale_id"]
+            isOneToOne: false
+            referencedRelation: "points_of_sale"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_cuts_history: {
         Row: {
@@ -150,6 +236,7 @@ export type Database = {
           remaining_cuts: number | null
           software_version: string | null
           status: string | null
+          tenant_id: string | null
           total_cuts: number | null
           updated_at: string
         }
@@ -174,6 +261,7 @@ export type Database = {
           remaining_cuts?: number | null
           software_version?: string | null
           status?: string | null
+          tenant_id?: string | null
           total_cuts?: number | null
           updated_at?: string
         }
@@ -198,10 +286,19 @@ export type Database = {
           remaining_cuts?: number | null
           software_version?: string | null
           status?: string | null
+          tenant_id?: string | null
           total_cuts?: number | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_send_log: {
         Row: {
@@ -326,6 +423,44 @@ export type Database = {
         }
         Relationships: []
       }
+      points_of_sale: {
+        Row: {
+          address: string | null
+          city: string | null
+          client_id: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_of_sale_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppressed_emails: {
         Row: {
           created_at: string
@@ -365,6 +500,7 @@ export type Database = {
           id: string
           logo_url: string | null
           low_stock_days: number
+          tenant_id: string | null
           tenant_name: string
           updated_at: string
         }
@@ -382,6 +518,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           low_stock_days?: number
+          tenant_id?: string | null
           tenant_name?: string
           updated_at?: string
         }
@@ -399,7 +536,40 @@ export type Database = {
           id?: string
           logo_url?: string | null
           low_stock_days?: number
+          tenant_id?: string | null
           tenant_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
           updated_at?: string
         }
         Relationships: []
