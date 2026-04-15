@@ -107,18 +107,28 @@ Deno.serve(async (req) => {
         { onConflict: "period" }
       );
 
-    // Calculate date range
+    // Calculate date range — split into two halves to avoid timeout
     const [year, month] = period.split("-").map(Number);
-    const from = `${period}-01`;
     const lastDay = new Date(year, month, 0).getDate();
-    const to = `${period}-${String(lastDay).padStart(2, "0")}`;
+    const midDay = 15;
+    
+    const ranges = [
+      { from: `${period}-01`, to: `${period}-${String(midDay).padStart(2, "0")}` },
+      { from: `${period}-${String(midDay + 1).padStart(2, "0")}`, to: `${period}-${String(lastDay).padStart(2, "0")}` },
+    ];
 
-    console.log(`Backfilling ${period}: ${from} to ${to}`);
+    console.log(`Backfilling ${period} in 2 halves`);
 
-    // Login & fetch
+    // Login & fetch both halves
     const sessionId = await loginCutABC();
-    const transactions = await fetchTransactionsForPeriod(sessionId, from, to);
-    console.log(`Fetched ${transactions.length} transactions for ${period}`);
+    const allTransactions: Record<string, unknown>[] = [];
+    for (const range of ranges) {
+      console.log(`Fetching ${range.from} to ${range.to}...`);
+      const txs = await fetchTransactionsForPeriod(sessionId, range.from, range.to);
+      allTransactions.push(...txs);
+    }
+    const transactions = allTransactions;
+    console.log(`Fetched ${transactions.length} total transactions for ${period}`);
 
     // Group by fixno + date → count "Consume" cuts
     const dailyMap = new Map<string, { fixno: string; date: string; cuts: number }>();
