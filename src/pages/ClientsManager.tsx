@@ -59,14 +59,16 @@ function ClientDialog({
       return;
     }
     try {
-      // Parse coordinates from address if it looks like Google Maps coords
       const addrTrimmed = address.trim();
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const coordMatch = addrTrimmed.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
-      if (coordMatch) {
-        lat = parseFloat(coordMatch[1]);
-        lng = parseFloat(coordMatch[2]);
+      // Use lat/lng from autocomplete selection, or try parsing coords from text
+      let finalLat = lat;
+      let finalLng = lng;
+      if (!finalLat && !finalLng) {
+        const coordMatch = addrTrimmed.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+        if (coordMatch) {
+          finalLat = parseFloat(coordMatch[1]);
+          finalLng = parseFloat(coordMatch[2]);
+        }
       }
 
       if (isEdit) {
@@ -78,8 +80,8 @@ function ClientDialog({
           contact_phone: contactPhone.trim() || null,
           contact_email: contactEmail.trim() || null,
           address: addrTrimmed || null,
-          latitude: lat ?? editClient.latitude,
-          longitude: lng ?? editClient.longitude,
+          latitude: finalLat ?? editClient.latitude,
+          longitude: finalLng ?? editClient.longitude,
         });
         toast.success("Cliente actualizado");
       } else {
