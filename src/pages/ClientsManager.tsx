@@ -212,7 +212,13 @@ function PdVDialog({
           </div>
           <div>
             <Label>Dirección</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección" maxLength={200} />
+            <AddressAutocomplete
+              value={address}
+              onChange={setAddress}
+              onSelect={(result) => {
+                setAddress(result.address);
+              }}
+            />
           </div>
           <div>
             <Label>Ciudad</Label>
@@ -244,8 +250,19 @@ function AssignDeviceDialog({
   tenantId: string;
 }) {
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [search, setSearch] = useState("");
   const { data: unassigned = [] } = useUnassignedDevices(tenantId);
   const assign = useAssignDevice();
+
+  const filtered = unassigned.filter((d) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      d.fixno?.toLowerCase().includes(q) ||
+      d.customer_name?.toLowerCase().includes(q) ||
+      d.branch_name?.toLowerCase().includes(q)
+    );
+  });
 
   const handleAssign = async () => {
     if (!selectedDeviceId) {
@@ -256,6 +273,7 @@ function AssignDeviceDialog({
       await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId });
       toast.success("Equipo asignado");
       setSelectedDeviceId("");
+      setSearch("");
       onClose();
     } catch (e: any) {
       toast.error(e.message || "Error al asignar equipo");
@@ -272,20 +290,35 @@ function AssignDeviceDialog({
           {unassigned.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay equipos disponibles para asignar.</p>
           ) : (
-            <div>
-              <Label>Equipo disponible</Label>
-              <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar equipo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {unassigned.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.fixno} — {d.customer_name || d.branch_name || "Sin nombre"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-3">
+              <div>
+                <Label>Buscar equipo</Label>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar por ID o nombre..."
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label>Equipo disponible {filtered.length !== unassigned.length && <span className="text-muted-foreground font-normal">({filtered.length} de {unassigned.length})</span>}</Label>
+                <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar equipo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filtered.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">Sin resultados</div>
+                    ) : (
+                      filtered.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.fixno} — {d.customer_name || d.branch_name || "Sin nombre"}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
         </div>
