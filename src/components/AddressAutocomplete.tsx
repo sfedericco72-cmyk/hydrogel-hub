@@ -1,4 +1,3 @@
-/// <reference types="google.maps" />
 import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -23,132 +22,12 @@ interface AddressAutocompleteProps {
   maxLength?: number;
 }
 
-type GoogleLocationLike = {
-  lat?: number | (() => number);
-  lng?: number | (() => number);
-} | null | undefined;
-
-type GooglePlace = {
-  fetchFields: (request: { fields: string[] }) => Promise<void>;
-  formattedAddress?: string;
-  location?: GoogleLocationLike;
-};
-
-type GooglePlacePrediction = {
-  placeId: string;
-  text?: { text: string };
-  mainText?: { text: string };
-  secondaryText?: { text: string };
-  toPlace: () => GooglePlace;
-};
-
-type GoogleAutocompleteSuggestion = {
-  placePrediction?: GooglePlacePrediction;
-};
-
-type PlacesLibraryWithAutocomplete = {
-  AutocompleteSuggestion?: {
-    fetchAutocompleteSuggestions: (request: {
-      input: string;
-      inputOffset?: number;
-      language?: string;
-      region?: string;
-      includedRegionCodes?: string[];
-      sessionToken?: unknown;
-    }) => Promise<{ suggestions: GoogleAutocompleteSuggestion[] }>;
-  };
-  AutocompleteSessionToken?: new () => unknown;
-};
-
-type SuggestionItem = {
+interface PlaceSuggestion {
   id: string;
   mainText: string;
   secondaryText: string;
   fullText: string;
-  placePrediction: GooglePlacePrediction;
-};
-
-let googleMapsLoaded = false;
-let googleMapsLoadPromise: Promise<void> | null = null;
-
-function loadGoogleMapsScript(): Promise<void> {
-  if (!GOOGLE_MAPS_API_KEY) {
-    return Promise.reject(new Error("No API key"));
-  }
-
-  if (googleMapsLoaded && window.google?.maps?.importLibrary) {
-    return Promise.resolve();
-  }
-
-  if (googleMapsLoadPromise) {
-    return googleMapsLoadPromise;
-  }
-
-  googleMapsLoadPromise = new Promise((resolve, reject) => {
-    const finishLoad = async () => {
-      try {
-        if (!window.google?.maps?.importLibrary) {
-          throw new Error("Google Maps library unavailable");
-        }
-        await google.maps.importLibrary("places");
-        googleMapsLoaded = true;
-        resolve();
-      } catch (error) {
-        googleMapsLoadPromise = null;
-        reject(error);
-      }
-    };
-
-    if (window.google?.maps?.importLibrary) {
-      void finishLoad();
-      return;
-    }
-
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[src*="maps.googleapis.com/maps/api/js"]',
-    );
-
-    if (existingScript) {
-      existingScript.addEventListener("load", () => void finishLoad(), { once: true });
-      existingScript.addEventListener(
-        "error",
-        () => {
-          googleMapsLoadPromise = null;
-          reject(new Error("Failed to load Google Maps"));
-        },
-        { once: true },
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => void finishLoad();
-    script.onerror = () => {
-      googleMapsLoadPromise = null;
-      reject(new Error("Failed to load Google Maps"));
-    };
-    document.head.appendChild(script);
-  });
-
-  return googleMapsLoadPromise;
-}
-
-async function getPlacesLibrary(): Promise<PlacesLibraryWithAutocomplete> {
-  await loadGoogleMapsScript();
-  return (await google.maps.importLibrary("places")) as unknown as PlacesLibraryWithAutocomplete;
-}
-
-function readCoordinate(location: GoogleLocationLike, axis: "lat" | "lng"): number | null {
-  const value = location?.[axis];
-
-  if (typeof value === "function") {
-    return value();
-  }
-
-  return typeof value === "number" ? value : null;
+  placeId: string;
 }
 
 export function AddressAutocomplete({
@@ -162,62 +41,36 @@ export function AddressAutocomplete({
   const listId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
-  const sessionTokenRef = useRef<unknown>(null);
   const skipNextLookupRef = useRef(false);
-  const [apiStatus, setApiStatus] = useState<"loading" | "ready" | "fallback">(
-    GOOGLE_MAPS_API_KEY ? "loading" : "fallback",
-  );
   const [isSearching, setIsSearching] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [apiAvailable, setApiAvailable] = useState(!!GOOGLE_MAPS_API_KEY);
 
-  useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY) {
-      setApiStatus("fallback");
-      return;
-    }
-
-    let cancelled = false;
-
-    loadGoogleMapsScript()
-      .then(() => {
-        if (!cancelled) setApiStatus("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setApiStatus("fallback");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  // Close dropdown on outside click
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
+  // Fetch suggestions via REST API
   useEffect(() => {
     if (skipNextLookupRef.current) {
       skipNextLookupRef.current = false;
       return;
     }
 
-    if (apiStatus !== "ready") {
-      return;
-    }
+    if (!apiAvailable) return;
 
     const query = value.trim();
     const currentRequestId = ++requestIdRef.current;
 
     if (!query || query.length < 3) {
-      sessionTokenRef.current = null;
       setSuggestions([]);
       setIsOpen(false);
       setIsSearching(false);
@@ -226,101 +79,122 @@ export function AddressAutocomplete({
 
     const timeoutId = window.setTimeout(async () => {
       setIsSearching(true);
-      setIsOpen(false);
 
       try {
-        const placesLibrary = await getPlacesLibrary();
+        const response = await fetch(
+          "https://places.googleapis.com/v1/places:autocomplete",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY!,
+            },
+            body: JSON.stringify({
+              input: query,
+              languageCode: "es",
+              regionCode: "cl",
+              includedRegionCodes: ["cl"],
+            }),
+          },
+        );
 
-        if (!placesLibrary.AutocompleteSuggestion || !placesLibrary.AutocompleteSessionToken) {
-          throw new Error("Google Places Autocomplete API unavailable");
-        }
+        if (currentRequestId !== requestIdRef.current) return;
 
-        if (!sessionTokenRef.current) {
-          sessionTokenRef.current = new placesLibrary.AutocompleteSessionToken();
-        }
-
-        const response = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
-          input: query,
-          language: "es",
-          region: "cl",
-          includedRegionCodes: ["cl"],
-          sessionToken: sessionTokenRef.current,
-        });
-
-        if (currentRequestId !== requestIdRef.current) {
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error("Places API error:", response.status, errorData);
+          if (response.status === 403 || response.status === 400) {
+            setApiAvailable(false);
+          }
+          setSuggestions([]);
+          setIsOpen(false);
           return;
         }
 
-        const nextSuggestions = (response.suggestions || [])
-          .map((item) => item.placePrediction)
-          .filter((prediction): prediction is GooglePlacePrediction => Boolean(prediction))
-          .map((prediction) => {
-            const mainText = prediction.mainText?.text || prediction.text?.text || "";
-            const secondaryText = prediction.secondaryText?.text || "";
-            return {
-              id: prediction.placeId,
-              mainText,
-              secondaryText,
-              fullText:
-                prediction.text?.text || [mainText, secondaryText].filter(Boolean).join(", "),
-              placePrediction: prediction,
-            };
-          });
+        const data = await response.json();
+
+        if (currentRequestId !== requestIdRef.current) return;
+
+        const nextSuggestions: PlaceSuggestion[] = (data.suggestions || [])
+          .map((s: any) => s.placePrediction)
+          .filter(Boolean)
+          .map((p: any) => ({
+            id: p.placeId || p.place,
+            placeId: p.placeId || p.place?.replace("places/", ""),
+            mainText: p.structuredFormat?.mainText?.text || p.text?.text || "",
+            secondaryText: p.structuredFormat?.secondaryText?.text || "",
+            fullText: p.text?.text || "",
+          }));
 
         setSuggestions(nextSuggestions);
         setIsOpen(nextSuggestions.length > 0);
       } catch (error) {
-        console.error("Google Places autocomplete failed", error);
-
-        if (currentRequestId !== requestIdRef.current) {
-          return;
+        console.error("Places autocomplete failed:", error);
+        if (currentRequestId === requestIdRef.current) {
+          setSuggestions([]);
+          setIsOpen(false);
         }
-
-        setSuggestions([]);
-        setIsOpen(false);
       } finally {
         if (currentRequestId === requestIdRef.current) {
           setIsSearching(false);
         }
       }
-    }, 250);
+    }, 300);
 
     return () => window.clearTimeout(timeoutId);
-  }, [apiStatus, value]);
+  }, [apiAvailable, value]);
 
-  const handleSelectSuggestion = async (suggestion: SuggestionItem) => {
+  const handleSelectSuggestion = async (suggestion: PlaceSuggestion) => {
     try {
       setIsSearching(true);
-      const place = suggestion.placePrediction.toPlace();
-      await place.fetchFields({ fields: ["formattedAddress", "location"] });
 
-      const result: AddressResult = {
-        address: place.formattedAddress || suggestion.fullText,
-        latitude: readCoordinate(place.location, "lat"),
-        longitude: readCoordinate(place.location, "lng"),
-      };
+      // Fetch place details via REST to get coordinates
+      const placeId = suggestion.placeId.startsWith("places/")
+        ? suggestion.placeId
+        : `places/${suggestion.placeId}`;
+
+      const response = await fetch(
+        `https://places.googleapis.com/v1/${placeId}?fields=formattedAddress,location`,
+        {
+          headers: {
+            "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY!,
+          },
+        },
+      );
+
+      let result: AddressResult;
+
+      if (response.ok) {
+        const data = await response.json();
+        result = {
+          address: data.formattedAddress || suggestion.fullText,
+          latitude: data.location?.latitude ?? null,
+          longitude: data.location?.longitude ?? null,
+        };
+      } else {
+        result = {
+          address: suggestion.fullText,
+          latitude: null,
+          longitude: null,
+        };
+      }
 
       skipNextLookupRef.current = true;
-      sessionTokenRef.current = null;
       setSuggestions([]);
       setIsOpen(false);
       onChange(result.address);
       onSelect?.(result);
     } catch (error) {
-      console.error("Failed to fetch selected place details", error);
-
-      const fallbackResult: AddressResult = {
+      console.error("Failed to fetch place details:", error);
+      skipNextLookupRef.current = true;
+      setSuggestions([]);
+      setIsOpen(false);
+      onChange(suggestion.fullText);
+      onSelect?.({
         address: suggestion.fullText,
         latitude: null,
         longitude: null,
-      };
-
-      skipNextLookupRef.current = true;
-      sessionTokenRef.current = null;
-      setSuggestions([]);
-      setIsOpen(false);
-      onChange(fallbackResult.address);
-      onSelect?.(fallbackResult);
+      });
     } finally {
       setIsSearching(false);
     }
@@ -335,7 +209,6 @@ export function AddressAutocomplete({
       setIsOpen(false);
       return;
     }
-
     if (e.key === "Enter" && isOpen && suggestions[0]) {
       e.preventDefault();
       void handleSelectSuggestion(suggestions[0]);
@@ -355,19 +228,19 @@ export function AddressAutocomplete({
         maxLength={maxLength}
         autoComplete="off"
         spellCheck={false}
-        aria-autocomplete={apiStatus === "ready" ? "list" : undefined}
-        aria-expanded={apiStatus === "ready" ? isOpen : undefined}
+        aria-autocomplete={apiAvailable ? "list" : undefined}
+        aria-expanded={apiAvailable ? isOpen : undefined}
         aria-controls={isOpen ? listId : undefined}
         className={cn(isSearching && "pr-10", className)}
       />
 
-      {isSearching && apiStatus === "ready" && (
+      {isSearching && apiAvailable && (
         <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
       )}
 
-      {apiStatus === "ready" && isOpen && suggestions.length > 0 && (
+      {apiAvailable && isOpen && suggestions.length > 0 && (
         <div
           id={listId}
           className="absolute z-50 mt-2 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg"
@@ -397,7 +270,7 @@ export function AddressAutocomplete({
         </div>
       )}
 
-      {apiStatus === "fallback" && (
+      {!apiAvailable && (
         <p className="mt-1 text-xs text-muted-foreground">
           Podés pegar la dirección o coordenadas desde Google Maps
         </p>
