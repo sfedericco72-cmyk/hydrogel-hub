@@ -155,6 +155,23 @@ export function useDeviceAssignments(pointOfSaleId?: string) {
   });
 }
 
+export function useDeviceAssignmentHistory(pointOfSaleId?: string) {
+  return useQuery({
+    queryKey: ["device-assignment-history", pointOfSaleId],
+    enabled: !!pointOfSaleId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_assignments")
+        .select("*, devices(fixno, customer_name)")
+        .eq("point_of_sale_id", pointOfSaleId!)
+        .not("unassigned_at", "is", null)
+        .order("unassigned_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useAssignDevice() {
   const qc = useQueryClient();
   return useMutation({
