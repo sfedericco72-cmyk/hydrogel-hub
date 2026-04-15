@@ -46,6 +46,8 @@ function ClientDialog({
   const [contactPhone, setContactPhone] = useState(editClient?.contact_phone || "");
   const [contactEmail, setContactEmail] = useState(editClient?.contact_email || "");
   const [address, setAddress] = useState(editClient?.address || "");
+  const [lat, setLat] = useState<number | null>(editClient?.latitude ?? null);
+  const [lng, setLng] = useState<number | null>(editClient?.longitude ?? null);
   const create = useCreateClient();
   const update = useUpdateClient();
   const isEdit = !!editClient;
