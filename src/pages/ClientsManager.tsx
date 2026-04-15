@@ -25,6 +25,7 @@ import {
   useUnassignedDevices,
 } from "@/hooks/useClients";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 // ── Client Form Dialog ──────────────────────────────────
 
@@ -45,6 +46,8 @@ function ClientDialog({
   const [contactPhone, setContactPhone] = useState(editClient?.contact_phone || "");
   const [contactEmail, setContactEmail] = useState(editClient?.contact_email || "");
   const [address, setAddress] = useState(editClient?.address || "");
+  const [lat, setLat] = useState<number | null>(editClient?.latitude ?? null);
+  const [lng, setLng] = useState<number | null>(editClient?.longitude ?? null);
   const create = useCreateClient();
   const update = useUpdateClient();
   const isEdit = !!editClient;
@@ -56,14 +59,16 @@ function ClientDialog({
       return;
     }
     try {
-      // Parse coordinates from address if it looks like Google Maps coords
       const addrTrimmed = address.trim();
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const coordMatch = addrTrimmed.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
-      if (coordMatch) {
-        lat = parseFloat(coordMatch[1]);
-        lng = parseFloat(coordMatch[2]);
+      // Use lat/lng from autocomplete selection, or try parsing coords from text
+      let finalLat = lat;
+      let finalLng = lng;
+      if (!finalLat && !finalLng) {
+        const coordMatch = addrTrimmed.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+        if (coordMatch) {
+          finalLat = parseFloat(coordMatch[1]);
+          finalLng = parseFloat(coordMatch[2]);
+        }
       }
 
       if (isEdit) {
@@ -75,8 +80,8 @@ function ClientDialog({
           contact_phone: contactPhone.trim() || null,
           contact_email: contactEmail.trim() || null,
           address: addrTrimmed || null,
-          latitude: lat ?? editClient.latitude,
-          longitude: lng ?? editClient.longitude,
+          latitude: finalLat ?? editClient.latitude,
+          longitude: finalLng ?? editClient.longitude,
         });
         toast.success("Cliente actualizado");
       } else {
@@ -88,8 +93,8 @@ function ClientDialog({
           contact_phone: contactPhone.trim() || null,
           contact_email: contactEmail.trim() || null,
           address: addrTrimmed || null,
-          latitude: lat,
-          longitude: lng,
+          latitude: finalLat,
+          longitude: finalLng,
         });
         toast.success("Cliente creado");
       }
@@ -132,8 +137,15 @@ function ClientDialog({
           </div>
           <div>
             <Label>Domicilio</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección o coordenadas de Google Maps (-33.45, -70.66)" maxLength={500} />
-            <p className="text-xs text-muted-foreground mt-1">Podés pegar la dirección o coordenadas desde Google Maps</p>
+            <AddressAutocomplete
+              value={address}
+              onChange={setAddress}
+              onSelect={(result) => {
+                setAddress(result.address);
+                setLat(result.latitude);
+                setLng(result.longitude);
+              }}
+            />
           </div>
         </div>
         <DialogFooter>
