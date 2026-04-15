@@ -137,6 +137,10 @@ export default function Setup() {
               <NumberField label="Ventana máxima de alertas (días)" value={form.alert_max_window_days} onChange={v => handleChange("alert_max_window_days", v)} min={1} max={60} />
             </div>
           </Section>
+
+          {/* Backfill */}
+          <BackfillSection />
+
         </div>
       </div>
     </div>
