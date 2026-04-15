@@ -16,11 +16,15 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Missing env vars' }), { status: 500 })
   }
 
+  // Auth: accept anon key or service_role key from either env var name
   const authHeader = req.headers.get('Authorization')
   const token = authHeader?.replace(/^Bearer\s+/i, '').trim()
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY')
-  console.log('Auth debug', { tokenLast10: token?.slice(-10), anonKeyLast10: anonKey?.slice(-10), match: token === anonKey })
-  if (!token || (token !== anonKey && token !== supabaseServiceKey)) {
+  const validKeys = [
+    Deno.env.get('SUPABASE_ANON_KEY'),
+    Deno.env.get('SUPABASE_PUBLISHABLE_KEY'),
+    supabaseServiceKey,
+  ].filter(Boolean)
+  if (!token || !validKeys.includes(token)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
