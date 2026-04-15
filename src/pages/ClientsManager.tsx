@@ -470,6 +470,7 @@ export default function ClientsManager() {
   const { data: tenant } = useDefaultTenant();
   const { data: clients = [], isLoading } = useClients(tenant?.id);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
