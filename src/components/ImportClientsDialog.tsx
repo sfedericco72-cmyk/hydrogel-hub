@@ -23,7 +23,6 @@ const COLUMN_MAP: Record<string, keyof ParsedClient> = {
   código: "code",
   code: "code",
   cod: "code",
-  rut: "code",
   id_cliente: "code",
   nombre: "name",
   cliente: "name",
@@ -154,6 +153,17 @@ export function ImportClientsDialog({
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Código", "Nombre", "Contacto", "Teléfono", "Email"],
+      ["CLI-001", "Empresa Ejemplo S.A.", "Juan Pérez", "+1 555 1234", "juan@ejemplo.com"],
+    ]);
+    ws["!cols"] = [{ wch: 12 }, { wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 28 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+    XLSX.writeFile(wb, "plantilla_clientes.xlsx");
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -170,8 +180,16 @@ export function ImportClientsDialog({
               Subí un archivo CSV o Excel (.xlsx) con tus clientes. Las columnas se mapean automáticamente.
             </p>
             <p className="text-xs text-muted-foreground">
-              Columnas reconocidas: <span className="font-mono">código/cod/rut, nombre/cliente/razón_social, contacto, teléfono/fono, email/correo</span>
+              Columnas reconocidas: <span className="font-mono">código/cod, nombre/cliente/razón_social, contacto, teléfono, email/correo</span>
             </p>
+
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+                <FileSpreadsheet className="w-4 h-4 mr-1" /> Descargar plantilla
+              </Button>
+              <span className="text-xs text-muted-foreground">Completala con tus datos y subila acá</span>
+            </div>
+
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mb-2" />
               <span className="text-sm text-muted-foreground">Click para seleccionar archivo</span>
