@@ -1,46 +1,30 @@
 
 
-# Roadmap CutMonitor — Registro de decisiones
+# Autocompletado de direcciones con Google Maps Places API
 
-## Lo que definimos hoy
+## Lo que necesitas hacer (tu parte)
 
-### 1. CAMBIO DE MODELO DE DATOS (fundacional)
-Pasar de un modelo centrado en el equipo (`fixno`) a una estructura jerárquica:
+1. Ir a [Google Cloud Console](https://console.cloud.google.com/)
+2. Crear un proyecto (o usar uno existente)
+3. Habilitar la API **"Places API (New)"**
+4. Crear una API Key en Credenciales
+5. (Recomendado) Restringir la key por dominio HTTP: `*.lovable.app/*`
+6. Pasarme la API Key cuando la tengas
 
-```text
-Tenant (empresa)
-  └── Cliente
-        └── Punto de Venta (PdV)
-              └── Equipo(s) — con fecha de asignación/desasignación
-```
+Google da USD 200/mes de crédito gratis, que cubre ~28,000 solicitudes de autocompletado.
 
-**Reglas clave:**
-- Un PdV puede tener múltiples equipos al mismo tiempo
-- Los cortes de un equipo suman al PdV/Cliente **solo mientras está asignado**
-- Si se reasigna a otro cliente, empieza a sumar para el nuevo
-- Los reportes muestran cortes del **punto de venta**, no el acumulado histórico de la máquina
-- Resuelve el problema de reemplazos de equipos
+## Lo que implemento yo
 
-### 2. MULTI-TENANT
-- Cada empresa (tenant) tiene sus propios clientes, equipos y configuración
-- Primer caso de prueba: el socio
+1. **Guardar la key** como `VITE_GOOGLE_MAPS_API_KEY` en el proyecto
+2. **Crear componente `AddressAutocomplete`** que:
+   - Carga el script de Google Maps Places
+   - Muestra sugerencias mientras el usuario escribe
+   - Al seleccionar, extrae dirección formateada + latitud + longitud
+3. **Reemplazar el input de Domicilio** en el formulario de clientes por este componente
+4. **Aplicar también** en el formulario de Puntos de Venta si tiene campo dirección
 
-### 3. ONBOARDING GUIADO
-- Registro self-service con wizard de configuración inicial
-- Paso a paso simple para nuevos tenants
-
-### 4. ROLES Y PERMISOS (segunda etapa)
-- Admin del tenant invita usuarios individuales
-- Usuarios ven solo los equipos/PdV asignados
-- Control de acceso granular
-
-## Orden de implementación sugerido
-1. **Modelo de datos** — es la base, todo se construye encima
-2. **Autenticación + multi-tenant básico**
-3. **Onboarding wizard**
-4. **Roles y permisos**
-
-## Acciones inmediatas de este plan
-- Guardar todo esto en la memoria del proyecto como roadmap
-- NO implementar nada todavía
+## Detalle tecnico
+- Libreria: `@react-google-maps/api` con `usePlacesAutocomplete` o Google Places Autocomplete Widget directo
+- Los valores se guardan en las columnas `address`, `latitude`, `longitude` que ya existen en `clients`
+- Si la API no carga (sin key o error), el campo funciona como input de texto normal (fallback)
 
