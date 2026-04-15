@@ -26,10 +26,20 @@ Deno.serve(async (req) => {
     });
     const sid = (await loginRes.json()).data.sessionId;
 
+    const billdate_beg = url.searchParams.get("from") || "";
+    const billdate_end = url.searchParams.get("to") || "";
+    const fixno = url.searchParams.get("fixno") || "";
+    const dataArr = [
+      { billdate_beg },
+      { billdate_end },
+      { branna: "" },
+      { fixno },
+    ];
+
     const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId: sid },
-      body: new URLSearchParams({ itemno, data: "[]", pageindex: "1", pagesize: "3" }),
+      body: new URLSearchParams({ itemno, data: JSON.stringify(dataArr), pageindex: "1", pagesize: "5" }),
     });
     const data = await res.json();
 
