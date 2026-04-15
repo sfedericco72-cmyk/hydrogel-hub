@@ -443,10 +443,19 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
             </Button>
           </div>
         </div>
-        {(client.contact_name || client.contact_email) && (
-          <p className="text-xs text-muted-foreground pl-12">
-            {[client.contact_name, client.contact_email, client.contact_phone].filter(Boolean).join(" · ")}
-          </p>
+        {(client.contact_name || client.contact_email || client.address) && (
+          <div className="pl-12 space-y-0.5">
+            {(client.contact_name || client.contact_email) && (
+              <p className="text-xs text-muted-foreground">
+                {[client.contact_name, client.contact_email, client.contact_phone].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {client.address && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> {client.address}
+              </p>
+            )}
+          </div>
         )}
       </CardHeader>
 
