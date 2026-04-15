@@ -251,6 +251,7 @@ function AssignDeviceDialog({
 }) {
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [search, setSearch] = useState("");
+  const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
   const { data: unassigned = [] } = useUnassignedDevices(tenantId);
   const assign = useAssignDevice();
 
@@ -270,10 +271,12 @@ function AssignDeviceDialog({
       return;
     }
     try {
-      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId });
+      const assignedAt = new Date(assignDate + "T00:00:00").toISOString();
+      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, assigned_at: assignedAt });
       toast.success("Equipo asignado");
       setSelectedDeviceId("");
       setSearch("");
+      setAssignDate(new Date().toISOString().slice(0, 10));
       onClose();
     } catch (e: any) {
       toast.error(e.message || "Error al asignar equipo");
@@ -322,6 +325,16 @@ function AssignDeviceDialog({
               {filtered.length > 0 && (
                 <p className="text-xs text-muted-foreground">{filtered.length} equipo{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}</p>
               )}
+              <div>
+                <Label>Fecha de inicio de asignación</Label>
+                <Input
+                  type="date"
+                  value={assignDate}
+                  onChange={(e) => setAssignDate(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Los cortes desde esta fecha se contabilizarán para este PdV</p>
+              </div>
             </>
           )}
         </div>
