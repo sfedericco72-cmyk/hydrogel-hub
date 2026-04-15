@@ -1,9 +1,11 @@
 /// <reference types="google.maps" />
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined || "AIzaSyC41pE7_0Lw73Hy2Ruj8qmYGSlvYbk1_5c";
+const GOOGLE_MAPS_API_KEY =
+  (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ||
+  "AIzaSyC41pE7_0Lw73Hy2Ruj8qmYGSlvYbk1_5c";
 
 interface AddressResult {
   address: string;
@@ -63,6 +65,14 @@ export function AddressAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const [apiAvailable, setApiAvailable] = useState(false);
+  const onSelectRef = useRef(onSelect);
+  const onChangeRef = useRef(onChange);
+
+  // Keep refs in sync to avoid re-creating autocomplete listener
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    onChangeRef.current = onChange;
+  });
 
   useEffect(() => {
     if (!GOOGLE_MAPS_API_KEY) return;
@@ -88,21 +98,25 @@ export function AddressAutocomplete({
         longitude: place.geometry.location.lng(),
       };
 
-      onChange(result.address);
-      onSelect?.(result);
+      onChangeRef.current(result.address);
+      onSelectRef.current?.(result);
     });
 
     autocompleteRef.current = autocomplete;
-  }, [apiAvailable, onChange, onSelect]);
+  }, [apiAvailable]);
 
-  // Fallback: plain input when API not available
+  // Always keep as controlled input — Google Autocomplete writes to the DOM
+  // directly, so we sync on every change event as well.
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+  };
+
   return (
     <div className="relative">
       <Input
         ref={inputRef}
-        value={apiAvailable ? undefined : value}
-        defaultValue={apiAvailable ? value : undefined}
-        onChange={apiAvailable ? undefined : (e) => onChange(e.target.value)}
+        value={value}
+        onChange={handleChange}
         placeholder={placeholder}
         maxLength={maxLength}
         className={cn(className)}
