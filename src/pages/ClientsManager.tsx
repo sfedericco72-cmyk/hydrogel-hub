@@ -93,8 +93,8 @@ function ClientDialog({
           contact_phone: contactPhone.trim() || null,
           contact_email: contactEmail.trim() || null,
           address: addrTrimmed || null,
-          latitude: lat,
-          longitude: lng,
+          latitude: finalLat,
+          longitude: finalLng,
         });
         toast.success("Cliente creado");
       }
