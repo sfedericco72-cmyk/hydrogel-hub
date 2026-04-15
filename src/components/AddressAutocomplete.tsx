@@ -216,7 +216,7 @@ export function AddressAutocomplete({
     const query = value.trim();
     const currentRequestId = ++requestIdRef.current;
 
-    if (!query) {
+    if (!query || query.length < 3) {
       sessionTokenRef.current = null;
       setSuggestions([]);
       setIsOpen(false);
@@ -241,7 +241,6 @@ export function AddressAutocomplete({
 
         const response = await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
           input: query,
-          inputOffset: value.length,
           language: "es",
           region: "cl",
           includedRegionCodes: ["cl"],
