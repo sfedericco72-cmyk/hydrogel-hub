@@ -24,12 +24,14 @@ async function loginCutABC(): Promise<string> {
   return data.data.sessionId;
 }
 
-async function fetchTransactionsForPeriod(
+async function fetchAllPages(
   sessionId: string,
   from: string,
   to: string
-): Promise<Record<string, unknown>[]> {
-  // First request to get total count
+): Promise<{ transactions: Record<string, unknown>[]; expected: number }> {
+  const pageSize = 1000;
+
+  // First page to get reccnt
   const firstRes = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
@@ -37,24 +39,22 @@ async function fetchTransactionsForPeriod(
       itemno: "fixbalaqty",
       data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
       pageindex: "1",
-      pagesize: "1000",
+      pagesize: String(pageSize),
     }),
   });
   const firstData = await firstRes.json();
-  if (firstData.success !== "1" || !firstData.listTask) return [];
+  if (firstData.success !== "1" || !firstData.listTask) return { transactions: [], expected: 0 };
 
-  const total = parseInt(firstData.reccnt);
+  const expected = parseInt(firstData.reccnt);
   const all: Record<string, unknown>[] = [...firstData.listTask];
-  console.log(`Page 1: fetched ${all.length}/${total}`);
+  console.log(`  [${from}→${to}] Page 1: ${all.length}/${expected}`);
 
-  if (all.length >= total) return all;
+  if (all.length >= expected) return { transactions: all, expected };
 
-  // Fetch remaining pages in parallel
-  const pageSize = 1000;
-  const remainingPages = Math.ceil((total - pageSize) / pageSize);
+  // Remaining pages in parallel
+  const totalPages = Math.ceil(expected / pageSize);
   const promises = [];
-  for (let i = 0; i < remainingPages; i++) {
-    const pageIndex = i + 2;
+  for (let p = 2; p <= totalPages; p++) {
     promises.push(
       fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
         method: "POST",
@@ -62,15 +62,13 @@ async function fetchTransactionsForPeriod(
         body: new URLSearchParams({
           itemno: "fixbalaqty",
           data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
-          pageindex: String(pageIndex),
+          pageindex: String(p),
           pagesize: String(pageSize),
         }),
       }).then(r => r.json()).then(d => {
-        if (d.success === "1" && d.listTask) {
-          console.log(`Page ${pageIndex}: fetched ${d.listTask.length}`);
-          return d.listTask as Record<string, unknown>[];
-        }
-        return [];
+        const items = (d.success === "1" && d.listTask) ? d.listTask as Record<string, unknown>[] : [];
+        console.log(`  [${from}→${to}] Page ${p}: ${items.length}`);
+        return items;
       })
     );
   }
@@ -78,7 +76,7 @@ async function fetchTransactionsForPeriod(
   const results = await Promise.all(promises);
   for (const r of results) all.push(...r);
 
-  return all;
+  return { transactions: all, expected };
 }
 
 Deno.serve(async (req) => {
@@ -95,9 +93,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Mark as loading
     await supabase
@@ -107,41 +103,67 @@ Deno.serve(async (req) => {
         { onConflict: "period" }
       );
 
-    // Calculate date range — split into two halves to avoid timeout
+    // Full month range
     const [year, month] = period.split("-").map(Number);
     const lastDay = new Date(year, month, 0).getDate();
-    const midDay = 15;
-    
+    const from = `${period}-01`;
+    const to = `${period}-${String(lastDay).padStart(2, "0")}`;
+
+    // Split into two halves (API can be slow with large date ranges)
+    const mid = 15;
     const ranges = [
-      { from: `${period}-01`, to: `${period}-${String(midDay).padStart(2, "0")}` },
-      { from: `${period}-${String(midDay + 1).padStart(2, "0")}`, to: `${period}-${String(lastDay).padStart(2, "0")}` },
+      { from, to: `${period}-${String(mid).padStart(2, "0")}` },
+      { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
     ];
 
-    console.log(`Backfilling ${period} in 2 halves`);
+    console.log(`Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
 
-    // Login & fetch both halves
     const sessionId = await loginCutABC();
+
+    // Fetch both halves
+    let totalExpected = 0;
     const allTransactions: Record<string, unknown>[] = [];
     for (const range of ranges) {
-      console.log(`Fetching ${range.from} to ${range.to}...`);
-      const txs = await fetchTransactionsForPeriod(sessionId, range.from, range.to);
-      allTransactions.push(...txs);
+      const result = await fetchAllPages(sessionId, range.from, range.to);
+      allTransactions.push(...result.transactions);
+      totalExpected += result.expected;
     }
-    const transactions = allTransactions;
-    console.log(`Fetched ${transactions.length} total transactions for ${period}`);
 
-    // Group by fixno + date → count "Consume" cuts
+    console.log(`Fetched ${allTransactions.length} transactions (expected ${totalExpected})`);
+
+    // Deduplicate by billno
+    const seen = new Set<string>();
+    const uniqueTransactions: Record<string, unknown>[] = [];
+    let dupes = 0;
+    for (const tx of allTransactions) {
+      const billno = tx.billno as string;
+      if (!billno || seen.has(billno)) {
+        dupes++;
+        continue;
+      }
+      seen.add(billno);
+      uniqueTransactions.push(tx);
+    }
+    if (dupes > 0) console.log(`Removed ${dupes} duplicates by billno`);
+
+    // Separate Consume vs other types
+    let consumeCount = 0;
+    let otherCount = 0;
     const dailyMap = new Map<string, { fixno: string; date: string; cuts: number }>();
 
-    for (const tx of transactions) {
+    for (const tx of uniqueTransactions) {
       const kind = ((tx.balakindna2 as string) || "").trim();
-      if (kind !== "Consume") continue;
+      if (kind !== "Consume") {
+        otherCount++;
+        continue;
+      }
+      consumeCount++;
 
       const fixno = tx.fixno as string;
       const billdate = tx.billdate as string;
       if (!fixno || !billdate) continue;
 
-      const date = billdate.substring(0, 10); // YYYY-MM-DD
+      const date = billdate.substring(0, 10);
       const key = `${fixno}|${date}`;
       const qty = parseInt(tx.busiqty2 as string) || 1;
 
@@ -153,15 +175,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Aggregated into ${dailyMap.size} daily records`);
+    console.log(`Consume: ${consumeCount}, Other: ${otherCount}, Daily records: ${dailyMap.size}`);
 
-    // We need total_cuts for each record. Get current device totals and work backwards.
-    // Since we don't have historical totals, we'll set total_cuts = 0 and daily_cuts = aggregated cuts.
-    // The daily_cuts is what matters for attach rate calculations.
     const historyData = Array.from(dailyMap.values()).map((d) => ({
       fixno: d.fixno,
       cut_date: d.date,
-      total_cuts: 0, // historical total unknown, daily_cuts is what matters
+      total_cuts: 0,
       daily_cuts: d.cuts,
     }));
 
@@ -172,11 +191,7 @@ Deno.serve(async (req) => {
       const { error } = await supabase
         .from("device_cuts_history")
         .upsert(chunk, { onConflict: "fixno,cut_date" });
-
-      if (error) {
-        console.error(`Upsert error at chunk ${i}: ${error.message}`);
-        throw new Error(`Upsert failed: ${error.message}`);
-      }
+      if (error) throw new Error(`Upsert failed: ${error.message}`);
       inserted += chunk.length;
     }
 
@@ -187,27 +202,36 @@ Deno.serve(async (req) => {
         status: "done",
         records_loaded: inserted,
         completed_at: new Date().toISOString(),
+        error_message: null,
       })
       .eq("period", period);
 
-    console.log(`Backfill complete: ${inserted} records for ${period}`);
+    const summary = {
+      success: true,
+      period,
+      total_transactions: uniqueTransactions.length,
+      expected_transactions: totalExpected,
+      consume_transactions: consumeCount,
+      other_transactions: otherCount,
+      duplicates_removed: dupes,
+      daily_records: inserted,
+      complete: uniqueTransactions.length >= totalExpected,
+    };
+    console.log(`Backfill complete:`, JSON.stringify(summary));
 
-    return new Response(
-      JSON.stringify({ success: true, period, records: inserted, transactions: transactions.length }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify(summary), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Backfill error:", error);
-
-    // Try to mark as error
     try {
       const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-      const { period } = await req.clone().json().catch(() => ({ period: null }));
-      if (period) {
+      const body = await req.clone().json().catch(() => ({}));
+      if (body.period) {
         await supabase
           .from("cuts_history_backfill")
           .update({ status: "error", error_message: error.message })
-          .eq("period", period);
+          .eq("period", body.period);
       }
     } catch (_) { /* ignore */ }
 
