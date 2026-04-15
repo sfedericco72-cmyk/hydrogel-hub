@@ -137,8 +137,15 @@ function ClientDialog({
           </div>
           <div>
             <Label>Domicilio</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección o coordenadas de Google Maps (-33.45, -70.66)" maxLength={500} />
-            <p className="text-xs text-muted-foreground mt-1">Podés pegar la dirección o coordenadas desde Google Maps</p>
+            <AddressAutocomplete
+              value={address}
+              onChange={setAddress}
+              onSelect={(result) => {
+                setAddress(result.address);
+                setLat(result.latitude);
+                setLng(result.longitude);
+              }}
+            />
           </div>
         </div>
         <DialogFooter>
