@@ -271,8 +271,9 @@ function PdVRow({
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const { data: assignments = [] } = useDeviceAssignments(expanded ? pdv.id : undefined);
+  const { data: history = [] } = useDeviceAssignmentHistory(expanded && showHistory ? pdv.id : undefined);
   const unassign = useUnassignDevice();
 
   return (
