@@ -147,6 +147,13 @@ export default function Dashboard() {
               Emails
             </button>
             <button
+              onClick={() => navigate("/clientes")}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
+            >
+              <Building2 className="h-4 w-4" />
+              Clientes
+            </button>
+            <button
               onClick={() => navigate("/setup")}
               className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent"
             >
