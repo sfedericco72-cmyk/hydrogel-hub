@@ -164,6 +164,7 @@ export function ImportClientsDialog({
     XLSX.writeFile(wb, "plantilla_clientes.xlsx");
   };
 
+  return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
