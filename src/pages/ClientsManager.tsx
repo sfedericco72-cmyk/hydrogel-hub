@@ -25,6 +25,7 @@ import {
   useUnassignedDevices,
 } from "@/hooks/useClients";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 // ── Client Form Dialog ──────────────────────────────────
 
