@@ -171,6 +171,14 @@ export function ImportClientsDialog({
             <p className="text-xs text-muted-foreground">
               Columnas reconocidas: <span className="font-mono">código/cod, nombre/cliente/razón_social, contacto, teléfono, email/correo</span>
             </p>
+
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+                <FileSpreadsheet className="w-4 h-4 mr-1" /> Descargar plantilla
+              </Button>
+              <span className="text-xs text-muted-foreground">Completala con tus datos y subila acá</span>
+            </div>
+
             <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mb-2" />
               <span className="text-sm text-muted-foreground">Click para seleccionar archivo</span>
