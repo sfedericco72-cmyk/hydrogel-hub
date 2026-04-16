@@ -1,51 +1,38 @@
 
 
-El usuario quiere dos cosas:
+El usuario está en `/auth` (cutmonitor.com/auth) y dice que no ve el mensaje de beta ni la info que hablamos. Mirando la captura: solo se ve el card de "Inicia sesión para continuar" sin el aviso de beta.
 
-1. **Cambiar el email de contacto** en el banner de bienvenida y en la página de Auth de `santiago.federico@bitec.cl` a `cutmonitor@bitec.cl`.
-2. **Saber dónde actualizar la lista blanca** de emails autorizados.
+Revisando `src/pages/Auth.tsx`: el aviso amber con `ShieldAlert` que explica beta + invitación + email de contacto está dentro de `{!isLogin && (...)}` — solo se muestra en modo **registro**, no en login. Por eso no lo ve: está en la pantalla de login.
 
-## 1. Cambio de email de contacto
+El `WelcomeBanner` con toda la info de beta + funcionalidad + acceso por invitación está en el **Dashboard**, que requiere estar logueado. Tampoco lo ve porque no entró todavía.
 
-Reemplazar la constante `CONTACT_EMAIL` en dos archivos:
-- `src/components/WelcomeBanner.tsx` línea 8: `"santiago.federico@bitec.cl"` → `"cutmonitor@bitec.cl"`
-- `src/pages/Auth.tsx` línea 13: `"santiago.federico@bitec.cl"` → `"cutmonitor@bitec.cl"`
+## Problema
 
-También actualizo la memoria `auth.md` para reflejar el nuevo email.
+El usuario nuevo (no logueado) no ve nada del contexto de beta hasta que hace click en "Regístrate" o entra a la app. La landing real es `/auth` en modo login y ahí no hay info.
 
-**Nota sobre `bcc_email`**: el campo `bcc_email` en `tenant_settings` (default `santiago.federico@bitec.cl`) es independiente — se usa como BCC en alertas transaccionales, no como email de contacto público. No lo toco salvo que vos lo pidas.
+## Propuesta
 
-**Nota sobre el dominio**: `cutmonitor@bitec.cl` es solo un texto de contacto (mailto). Para que ese buzón reciba mails de verdad, vos tenés que crearlo en el proveedor de correo de `bitec.cl`. No requiere cambios técnicos en CutMonitor.
+Mostrar el aviso de beta + invitación **siempre** en `/auth` (no solo en signup). Dos opciones de presentación:
 
-## 2. Cómo actualizar la lista blanca (`allowed_emails`)
+**A. Mover el aviso fuera del `{!isLogin && ...}`** para que se muestre en login y signup. Mismo bloque amber compacto que ya existe.
 
-Hoy **no hay UI de admin** para esto. Las opciones disponibles:
+**B. Agregar arriba del card un bloque más visible** estilo mini-hero: título "CutMonitor (BETA)", una línea de qué hace + conexión con cutabc.cn, y la nota de invitación con email. Más vendedor y deja claro de qué se trata antes de pedir credenciales.
 
-**Opción A — SQL directo desde Lovable Cloud (lo que hay hoy)**
-Vos abrís el backend de Lovable Cloud (botón "View Backend") → SQL editor, y corrés:
-```sql
--- Agregar un email autorizado
-INSERT INTO allowed_emails (email, notes)
-VALUES ('cliente@empresa.com', 'Cliente Bitec — Tomás');
+Recomiendo **B** porque es la primera impresión pública del producto y hoy es muy seca. El bloque va arriba del Card, ancho similar (max-w-md), tono sutil para no competir con el form.
 
--- Ver todos los emails autorizados
-SELECT email, notes, used_at, created_at FROM allowed_emails ORDER BY created_at DESC;
-
--- Quitar autorización
-DELETE FROM allowed_emails WHERE email = 'cliente@empresa.com';
-```
-El trigger `normalize_allowed_email` se encarga de pasar el email a minúsculas automáticamente.
-
-**Opción B — Crear una pantalla `/admin/emails` (no incluida en este cambio)**
-Una UI simple para listar, agregar y borrar emails desde el navegador, protegida por rol admin. Si querés, lo armamos en una tarea separada.
-
-## Cambio propuesto en este turno
-
-Solo el rename del email de contacto (3 archivos). La pantalla admin la dejo como sugerencia para que decidas si querés armarla ahora o más adelante.
+## Cambio único
 
 ```text
-EDIT src/components/WelcomeBanner.tsx          — CONTACT_EMAIL → cutmonitor@bitec.cl
-EDIT src/pages/Auth.tsx                        — CONTACT_EMAIL → cutmonitor@bitec.cl
-EDIT .lovable/memory/features/auth.md          — actualizar email de contacto
+EDIT src/pages/Auth.tsx — agregar bloque informativo arriba del Card,
+                          visible siempre (login y signup).
+                          Mantener el ShieldAlert dentro de signup como refuerzo
+                          o quitarlo (queda redundante). Propongo quitarlo.
 ```
+
+Contenido del bloque (arriba del Card, mismo max-w-md):
+- Badge "BETA" + título "CutMonitor"
+- 1 línea: "Monitoreo en tiempo real de máquinas de corte de hidrogel conectadas a CutABC (cutabc.cn)."
+- 1 línea con ícono mail: "Acceso por invitación. Solicitá autorización a cutmonitor@bitec.cl indicando empresa y email."
+
+Sin lista larga de features (eso queda para el WelcomeBanner del Dashboard, post-login). Acá solo lo mínimo para que entiendan qué es y cómo pedir acceso.
 
