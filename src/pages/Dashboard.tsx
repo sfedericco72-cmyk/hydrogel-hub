@@ -266,30 +266,31 @@ export default function Dashboard() {
                       <span className="text-xs text-muted-foreground">({client.deviceCount})</span>
                     </div>
 
-                    <div className="ml-2 space-y-4 border-l border-border pl-4">
-                      {client.pointsOfSale.map(pos => (
-                        <div key={pos.id}>
-                          <div className="mb-2 flex items-center gap-2">
-                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                            <h3 className="text-sm font-medium text-foreground">{pos.name}</h3>
-                            {pos.city && (
-                              <span className="text-xs text-muted-foreground">· {pos.city}</span>
-                            )}
-                            <span className="text-xs text-muted-foreground">({pos.devices.length})</span>
-                          </div>
-                          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                            {pos.devices.map(ad => (
+                    <div className="ml-2 border-l border-border pl-4">
+                      <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {client.pointsOfSale.flatMap(pos =>
+                          pos.devices.map((ad, idx) => (
+                            <div key={ad.device.id} className="flex flex-col gap-2">
+                              {idx === 0 && (
+                                <div className="flex items-center gap-2 pt-1">
+                                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <h3 className="text-sm font-medium text-foreground">{pos.name}</h3>
+                                  {pos.city && (
+                                    <span className="text-xs text-muted-foreground">· {pos.city}</span>
+                                  )}
+                                  <span className="text-xs text-muted-foreground">({pos.devices.length})</span>
+                                </div>
+                              )}
                               <DeviceCard
-                                key={ad.device.id}
                                 device={ad.device}
                                 lastCutDates={lastCutDates}
                                 avgDailyCuts={avgDailyCuts}
                                 monthlyCutsMap={monthlyCutsMap}
                               />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
