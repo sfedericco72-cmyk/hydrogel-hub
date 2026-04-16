@@ -107,13 +107,48 @@ export default function BranchDetail() {
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
   const [resolution, setResolution] = useState<TimeResolution>("monthly");
 
-  const chartData = useMemo(() => aggregateHistory(history, resolution), [history, resolution]);
+  // Get assignment start date for this device
+  const { data: assignmentStartDate } = useQuery({
+    queryKey: ["device-assignment-start", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_assignments")
+        .select("assigned_at")
+        .eq("device_id", id!)
+        .is("unassigned_at", null)
+        .order("assigned_at", { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0]?.assigned_at?.slice(0, 10) ?? null;
+    },
+  });
 
-  const resolutionLabels: Record<TimeResolution, string> = {
-    weekly: "Semanal (últ. 3 meses)",
-    monthly: "Mensual",
-    annual: "Anual",
-  };
+  // Filter history by assignment date for charts
+  const filteredHistory = useMemo(() => {
+    if (!assignmentStartDate) return history;
+    return history.filter(r => r.cut_date >= assignmentStartDate);
+  }, [history, assignmentStartDate]);
+
+  const chartData = useMemo(() => aggregateHistory(history, resolution, assignmentStartDate), [history, resolution, assignmentStartDate]);
+
+  // Cortes totales = sum of daily_cuts since assignment
+  const totalCutsSinceAssignment = useMemo(() => {
+    return filteredHistory.reduce((sum, r) => sum + (r.daily_cuts ?? 0), 0);
+  }, [filteredHistory]);
+
+  // Filter monthlyCutsMap for traffic lights
+  const filteredMonthlyCuts = useMemo(() => {
+    if (!device?.fixno || !monthlyCutsMap) return undefined;
+    const deviceMap = monthlyCutsMap.get(device.fixno);
+    if (!deviceMap || !assignmentStartDate) return deviceMap;
+    const startMonth = assignmentStartDate.slice(0, 7);
+    const filtered = new Map<string, number>();
+    deviceMap.forEach((cuts, month) => {
+      if (month >= startMonth) filtered.set(month, cuts);
+    });
+    return filtered;
+  }, [device?.fixno, monthlyCutsMap, assignmentStartDate]);
 
   if (isLoading) {
     return (
