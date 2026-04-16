@@ -249,7 +249,7 @@ function AssignDeviceDialog({
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [search, setSearch] = useState("");
   const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const { data: unassigned = [] } = useUnassignedDevices(tenantId);
+  const { data: unassigned = [] } = useUnassignedDevices();
   const assign = useAssignDevice();
 
   const filtered = unassigned.filter((d) => {
@@ -587,8 +587,8 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
 
 export default function ClientsManager() {
   const navigate = useNavigate();
-  const { data: tenant } = useDefaultTenant();
-  const { data: clients = [], isLoading } = useClients(tenant?.id);
+  const { data: tenantId } = useUserTenantId();
+  const { data: clients = [], isLoading } = useClients();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
