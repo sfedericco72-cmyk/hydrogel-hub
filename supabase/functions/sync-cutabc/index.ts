@@ -155,7 +155,7 @@ async function syncTenant(
       const chunk = upsertData.slice(i, i + 50);
       const { error } = await supabase
         .from("devices")
-        .upsert(chunk, { onConflict: "fixno" });
+        .upsert(chunk, { onConflict: "fixno,tenant_id" });
       if (error) throw new Error(`Upsert failed at chunk ${i}: ${error.message}`);
     }
   }
@@ -200,7 +200,7 @@ async function syncTenant(
       const chunk = historyData.slice(i, i + 50);
       const { error } = await supabase
         .from("device_cuts_history")
-        .upsert(chunk, { onConflict: "fixno,cut_date" });
+        .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
       if (error) console.error(`[${tenantId}] History upsert error: ${error.message}`);
     }
   }
@@ -233,7 +233,7 @@ async function syncTenant(
       const chunk = txData.slice(i, i + 50);
       const { error } = await supabase
         .from("device_transactions")
-        .upsert(chunk, { onConflict: "fixno,bill_no" });
+        .upsert(chunk, { onConflict: "fixno,bill_no,tenant_id" });
       if (error) {
         console.error(`[${tenantId}] Transaction upsert error: ${error.message}`);
       } else {
