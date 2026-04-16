@@ -28,6 +28,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/unsubscribe" element={<Unsubscribe />} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/sucursal/:id" element={<ProtectedRoute><BranchDetail /></ProtectedRoute>} />
           <Route path="/attach-rate" element={<ProtectedRoute><AttachRate /></ProtectedRoute>} />
