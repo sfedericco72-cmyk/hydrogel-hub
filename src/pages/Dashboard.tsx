@@ -1,6 +1,7 @@
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
 import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp, Settings, MapPin, AlertTriangle, LogOut } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
