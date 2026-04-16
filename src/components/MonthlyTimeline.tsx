@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type { Device } from "@/hooks/useDevices";
-import { getConnectionLevel, isStock } from "@/hooks/useDevices";
+import { getConnectionLevel, isStock, isDeviceDisconnected } from "@/hooks/useDevices";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info, Wifi, WifiOff } from "lucide-react";
 
 interface Props {
   devices: Device[];
@@ -36,7 +38,7 @@ export function MonthlyTimeline({ devices, monthlyCutsMap }: Props) {
       let devicesWithCuts = 0;
 
       if (monthlyCutsMap) {
-        monthlyCutsMap.forEach((deviceMonths, _fixno) => {
+        monthlyCutsMap.forEach((deviceMonths) => {
           const cuts = deviceMonths.get(month) ?? 0;
           if (cuts > 0) {
             totalCuts += cuts;
@@ -45,19 +47,16 @@ export function MonthlyTimeline({ devices, monthlyCutsMap }: Props) {
         });
       }
 
-      // For current month: count devices connected (green level = last 7 days)
-      // For past months: use devicesWithCuts as proxy
-      let connected = devicesWithCuts;
-      let disconnected = activeDevices.length - devicesWithCuts;
-
-      if (month === currentMonth) {
-        connected = activeDevices.filter(d => getConnectionLevel(d) === "green").length;
-        disconnected = activeDevices.length - connected;
-      }
-
-      return { month, totalCuts, devicesWithCuts, connected, disconnected };
+      return { month, totalCuts, devicesWithCuts };
     });
-  }, [months, monthlyCutsMap, activeDevices, currentMonth]);
+  }, [months, monthlyCutsMap]);
+
+  // Current connectivity (independent of monthly cuts)
+  const connectivity = useMemo(() => {
+    const online = activeDevices.filter(d => getConnectionLevel(d) === "green").length;
+    const offline = activeDevices.filter(d => isDeviceDisconnected(d)).length;
+    return { online, offline, total: activeDevices.length };
+  }, [activeDevices]);
 
   if (!monthlyCutsMap) {
     return (
@@ -68,73 +67,115 @@ export function MonthlyTimeline({ devices, monthlyCutsMap }: Props) {
   }
 
   return (
-    <div className="rounded-lg border bg-card p-5 overflow-x-auto">
-      <h3 className="mb-4 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-        Resumen últimos 6 meses
-      </h3>
-      <table className="w-full text-sm">
-        <thead>
-          <tr>
-            <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground" />
-            {data.map((d) => (
-              <th
-                key={d.month}
-                className={`pb-2 px-2 text-center text-xs font-medium ${
-                  d.month === currentMonth ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                {formatMonth(d.month)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">Cortes</td>
-            {data.map((d) => (
-              <td key={d.month} className="py-1.5 px-2 text-center font-semibold tabular-nums">
-                {d.totalCuts.toLocaleString("es-AR")}
+    <TooltipProvider delayDuration={200}>
+      <div className="rounded-lg border bg-card p-5 overflow-x-auto">
+        <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Producción últimos 6 meses
+          </h3>
+
+          {/* Connectivity snapshot — independent of monthly cuts */}
+          <div className="flex items-center gap-3 text-xs">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 cursor-help">
+                  <Wifi className="h-3.5 w-3.5 text-status-online" />
+                  <span className="font-medium text-status-online tabular-nums">{connectivity.online}</span>
+                  <span className="text-muted-foreground">online</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs text-xs">Equipos con señal en los últimos 7 días. Mide conexión a internet, no producción.</p>
+              </TooltipContent>
+            </Tooltip>
+            <span className="text-muted-foreground/40">·</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 cursor-help">
+                  <WifiOff className="h-3.5 w-3.5 text-status-offline" />
+                  <span className="font-medium text-status-offline tabular-nums">{connectivity.offline}</span>
+                  <span className="text-muted-foreground">desconectados</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs text-xs">Equipos sin señal hace más de 7 días.</p>
+              </TooltipContent>
+            </Tooltip>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-muted-foreground">{connectivity.total} totales</span>
+          </div>
+        </div>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="pb-2 pr-4 text-left text-xs font-medium text-muted-foreground" />
+              {data.map((d) => (
+                <th
+                  key={d.month}
+                  className={`pb-2 px-2 text-center text-xs font-medium ${
+                    d.month === currentMonth ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {formatMonth(d.month)}
+                  {d.month === currentMonth && (
+                    <div className="text-[9px] font-normal opacity-70 normal-case">en curso</div>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 cursor-help">
+                      Cortes
+                      <Info className="h-3 w-3 opacity-50" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-xs">Suma total de cortes realizados por todos los equipos en ese mes.</p>
+                  </TooltipContent>
+                </Tooltip>
               </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">Equipos con cortes</td>
-            {data.map((d) => (
-              <td key={d.month} className="py-1.5 px-2 text-center">
-                <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  d.devicesWithCuts > 0 ? "bg-status-online/20 text-status-online" : "bg-status-offline/20 text-status-offline"
-                }`}>
-                  {d.devicesWithCuts}
-                </span>
+              {data.map((d) => (
+                <td key={d.month} className="py-1.5 px-2 text-center font-semibold tabular-nums">
+                  {d.totalCuts.toLocaleString("es-AR")}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 cursor-help">
+                      Equipos con cortes
+                      <Info className="h-3 w-3 opacity-50" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-xs">Cantidad de equipos distintos que registraron al menos 1 corte ese mes.</p>
+                  </TooltipContent>
+                </Tooltip>
               </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">
-              {`Conectados`}
-              <span className="ml-1 text-[10px] opacity-60">(7d)</span>
-            </td>
-            {data.map((d) => (
-              <td key={d.month} className="py-1.5 px-2 text-center">
-                <span className="text-xs font-medium text-status-online">{d.connected}</span>
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="py-1.5 pr-4 text-xs text-muted-foreground whitespace-nowrap">Desconectados</td>
-            {data.map((d) => (
-              <td key={d.month} className="py-1.5 px-2 text-center">
-                <span className={`text-xs font-medium ${d.disconnected > 0 ? "text-status-offline" : "text-muted-foreground"}`}>
-                  {d.disconnected}
-                </span>
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-      <p className="mt-2 text-[10px] text-muted-foreground opacity-60">
-        * Meses anteriores: "conectados" = equipos con cortes. Mes actual: conexión real (últimos 7 días).
-      </p>
-    </div>
+              {data.map((d) => (
+                <td key={d.month} className="py-1.5 px-2 text-center">
+                  <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    d.devicesWithCuts > 0 ? "bg-status-online/20 text-status-online" : "bg-status-offline/20 text-status-offline"
+                  }`}>
+                    {d.devicesWithCuts}
+                  </span>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+        <p className="mt-3 text-[10px] text-muted-foreground opacity-70">
+          La conexión a internet (online/desconectados) y la producción de cortes son dimensiones independientes: un equipo puede estar online sin haber cortado este mes, o haber cortado en meses pasados y estar offline ahora.
+        </p>
+      </div>
+    </TooltipProvider>
   );
 }
