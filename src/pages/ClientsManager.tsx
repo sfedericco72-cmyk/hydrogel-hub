@@ -1,5 +1,8 @@
 import { useState, useMemo, useRef } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug, Upload, History, Calendar, Search } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug, Upload, History, Calendar, Search, BellOff, Bell } from "lucide-react";
+import { PdVAlertSettings } from "@/components/PdVAlertSettings";
+import { GlobalAlertsPauseDialog } from "@/components/GlobalAlertsPauseDialog";
+import { useTenantSettings } from "@/hooks/useTenantSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -419,8 +422,14 @@ function PdVRow({
       </div>
 
       {expanded && (
-        <div className="px-4 pb-3 space-y-2">
+        <div className="px-4 pb-3 space-y-3">
           {pdv.address && <p className="text-xs text-muted-foreground">{pdv.address}</p>}
+
+          {/* Alert settings */}
+          <PdVAlertSettings
+            pdv={pdv as any}
+            fixnos={assignments.map((a: any) => a.devices?.fixno).filter(Boolean)}
+          />
 
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Equipos asignados</span>
@@ -592,8 +601,14 @@ export default function ClientsManager() {
   const navigate = useNavigate();
   const { data: tenantId } = useUserTenantId();
   const { data: clients = [], isLoading } = useClients();
+  const { data: settings } = useTenantSettings();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [pauseOpen, setPauseOpen] = useState(false);
+
+  const isPaused = settings?.alerts_paused_until
+    ? new Date(settings.alerts_paused_until).getTime() > Date.now()
+    : false;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -612,6 +627,15 @@ export default function ClientsManager() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant={isPaused ? "secondary" : "outline"}
+              onClick={() => setPauseOpen(true)}
+              className={isPaused ? "border-yellow-600/40 text-yellow-400" : ""}
+              title={isPaused ? `Pausadas hasta ${new Date(settings!.alerts_paused_until!).toLocaleDateString("es-CL")}` : "Pausar alertas globalmente"}
+            >
+              {isPaused ? <BellOff className="w-4 h-4 mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
+              {isPaused ? "Alertas pausadas" : "Pausa alertas"}
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-2" /> Importar
             </Button>
@@ -659,6 +683,9 @@ export default function ClientsManager() {
           tenantId={tenantId}
           existingNames={clients.map((c) => c.name)}
         />
+      )}
+      {pauseOpen && (
+        <GlobalAlertsPauseDialog open={pauseOpen} onClose={() => setPauseOpen(false)} />
       )}
     </div>
   );

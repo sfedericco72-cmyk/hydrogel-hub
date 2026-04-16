@@ -1,6 +1,6 @@
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp, Settings, MapPin, AlertTriangle, LogOut } from "lucide-react";
+import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, TrendingUp, Settings, MapPin, AlertTriangle, LogOut } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -333,10 +333,6 @@ function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate
         <button onClick={() => navigate(`/attach-rate${clientFilter !== "all" ? `?client=${encodeURIComponent(clientFilter)}` : ""}`)}
           className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent">
           <TrendingUp className="h-4 w-4" /> Attach Rate
-        </button>
-        <button onClick={() => navigate("/emails")}
-          className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent">
-          <Mail className="h-4 w-4" /> Emails
         </button>
         <button onClick={() => navigate("/clientes")}
           className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent">

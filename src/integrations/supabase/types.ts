@@ -481,6 +481,8 @@ export type Database = {
       points_of_sale: {
         Row: {
           address: string | null
+          alert_email: string | null
+          alerts_enabled: boolean
           city: string | null
           client_id: string
           created_at: string
@@ -491,6 +493,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          alert_email?: string | null
+          alerts_enabled?: boolean
           city?: string | null
           client_id: string
           created_at?: string
@@ -501,6 +505,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          alert_email?: string | null
+          alerts_enabled?: boolean
           city?: string | null
           client_id?: string
           created_at?: string
@@ -589,6 +595,7 @@ export type Database = {
         Row: {
           alert_cooldown_days: number
           alert_max_window_days: number
+          alerts_paused_until: string | null
           attach_rate_green: number
           attach_rate_yellow: number
           bcc_email: string | null
@@ -610,6 +617,7 @@ export type Database = {
         Insert: {
           alert_cooldown_days?: number
           alert_max_window_days?: number
+          alerts_paused_until?: string | null
           attach_rate_green?: number
           attach_rate_yellow?: number
           bcc_email?: string | null
@@ -631,6 +639,7 @@ export type Database = {
         Update: {
           alert_cooldown_days?: number
           alert_max_window_days?: number
+          alerts_paused_until?: string | null
           attach_rate_green?: number
           attach_rate_yellow?: number
           bcc_email?: string | null
