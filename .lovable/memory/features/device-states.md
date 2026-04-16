@@ -1,12 +1,15 @@
 ---
 name: Device state classification & indicators
-description: 3-state system (stock/active/disconnected) with traffic light indicators for cuts and connection
+description: 4-state system (stock/active/inactive/disconnected) with traffic light indicators for cuts and connection
 type: feature
 ---
-## Device States (3 states)
+## Device States (4 states)
 - **En Stock**: no branch_name or branch_name === fixno
-- **Activo**: had cuts in last 3 months
-- **Desconectado**: no cuts in last 3 months
+- **Activo**: had cuts in last 3 months AND connected (≤14 days)
+- **Inactivo**: no cuts in last 3 months (but connected)
+- **Desconectado**: no internet connection >14 days
+
+Priority: stock > disconnected > inactive > active
 
 ## Traffic Light Indicators
 

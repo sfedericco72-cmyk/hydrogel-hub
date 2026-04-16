@@ -149,7 +149,7 @@ export function hasLowStock(
   return days < lowStockDays;
 }
 
-export type DeviceState = "stock" | "active" | "disconnected";
+export type DeviceState = "stock" | "active" | "inactive" | "disconnected";
 
 /** Check if device is "en stock" (no name or name equals fixno) */
 export function isStock(device: Device): boolean {
@@ -157,18 +157,34 @@ export function isStock(device: Device): boolean {
 }
 
 /**
- * 3-state classification:
+ * 4-state classification:
  * - stock: no branch_name or branch_name === fixno
- * - active: had cuts in any of the last 3 months
- * - disconnected: no cuts in last 3 months
+ * - active: had cuts in last N months AND connected recently
+ * - inactive: no cuts in last N months (but may be connected)
+ * - disconnected: no internet connection beyond threshold
+ *
+ * Priority: stock > disconnected > inactive > active
  */
 export function getDeviceState(
   device: Device,
   lastCutDates: Map<string, string> | undefined,
-  disconnectMonths = 3
+  disconnectMonths = 3,
+  connectionThresholdDays = 14
 ): DeviceState {
   if (isStock(device)) return "stock";
 
+  // Check internet connection
+  const isDisconnected = (() => {
+    if (!device.latest_online_time) return true;
+    const last = new Date(device.latest_online_time);
+    const now = new Date();
+    const diffDays = (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays > connectionThresholdDays;
+  })();
+
+  if (isDisconnected) return "disconnected";
+
+  // Check cuts activity
   const hasCutsRecently = (() => {
     if (!lastCutDates) return true;
     const lastCut = lastCutDates.get(device.fixno);
@@ -178,12 +194,13 @@ export function getDeviceState(
     return new Date(lastCut) >= cutoff;
   })();
 
-  return hasCutsRecently ? "active" : "disconnected";
+  return hasCutsRecently ? "active" : "inactive";
 }
 
 export const DEVICE_STATE_LABELS: Record<DeviceState, string> = {
   stock: "En stock",
   active: "Activo",
+  inactive: "Inactivo",
   disconnected: "Desconectado",
 };
 

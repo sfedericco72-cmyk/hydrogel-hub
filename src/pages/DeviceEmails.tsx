@@ -38,7 +38,7 @@ export default function DeviceEmails() {
   }, [scopedDevices, stateFilter, lastCutDates]);
 
   const stateCounts = useMemo(() => {
-    const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0 };
+    const counts: Record<DeviceState, number> = { stock: 0, active: 0, inactive: 0, disconnected: 0 };
     scopedDevices.forEach((d) => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
