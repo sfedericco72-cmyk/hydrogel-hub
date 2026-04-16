@@ -601,8 +601,14 @@ export default function ClientsManager() {
   const navigate = useNavigate();
   const { data: tenantId } = useUserTenantId();
   const { data: clients = [], isLoading } = useClients();
+  const { data: settings } = useTenantSettings();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [pauseOpen, setPauseOpen] = useState(false);
+
+  const isPaused = settings?.alerts_paused_until
+    ? new Date(settings.alerts_paused_until).getTime() > Date.now()
+    : false;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
