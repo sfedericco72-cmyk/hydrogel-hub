@@ -422,8 +422,14 @@ function PdVRow({
       </div>
 
       {expanded && (
-        <div className="px-4 pb-3 space-y-2">
+        <div className="px-4 pb-3 space-y-3">
           {pdv.address && <p className="text-xs text-muted-foreground">{pdv.address}</p>}
+
+          {/* Alert settings */}
+          <PdVAlertSettings
+            pdv={pdv as any}
+            fixnos={assignments.map((a: any) => a.devices?.fixno).filter(Boolean)}
+          />
 
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Equipos asignados</span>
