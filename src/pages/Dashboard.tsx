@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
 import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
-import { useDefaultTenant } from "@/hooks/useClients";
+import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -38,8 +38,8 @@ export default function Dashboard() {
     setSearchParams(params, { replace: true });
   }, [search, clientFilter, stateFilter, setSearchParams]);
 
-  const { data: tenant } = useDefaultTenant();
-  const { data: hierarchy = [], isLoading } = useAssignedHierarchy(tenant?.id);
+  const { data: tenantId } = useUserTenantId();
+  const { data: hierarchy = [], isLoading } = useAssignedHierarchy();
   const allDevices = useMemo(() => flatDevicesFromHierarchy(hierarchy), [hierarchy]);
   const startDates = useMemo(() => assignmentStartDates(hierarchy), [hierarchy]);
 
