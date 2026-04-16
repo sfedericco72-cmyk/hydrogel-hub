@@ -255,47 +255,30 @@ export default function Dashboard() {
             {isLoading ? (
               <div className="py-12 text-center text-muted-foreground">Cargando dispositivos...</div>
             ) : (
-              <div className="space-y-8">
-                {filteredHierarchy.map(client => (
-                  <div key={client.id}>
-                    <div className="mb-3 flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                        {client.name}
-                      </h2>
-                      <span className="text-xs text-muted-foreground">({client.deviceCount})</span>
-                    </div>
-
-                    <div className="ml-2 border-l border-border pl-4">
-                      <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-                        {client.pointsOfSale.flatMap(pos =>
-                          pos.devices.map((ad, idx) => (
-                            <div key={ad.device.id} className="flex flex-col gap-2">
-                              {idx === 0 && (
-                                <div className="flex items-center gap-2 pt-1">
-                                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                                  <h3 className="text-sm font-medium text-foreground">{pos.name}</h3>
-                                  {pos.city && (
-                                    <span className="text-xs text-muted-foreground">· {pos.city}</span>
-                                  )}
-                                  <span className="text-xs text-muted-foreground">({pos.devices.length})</span>
-                                </div>
-                              )}
-                              <DeviceCard
-                                device={ad.device}
-                                lastCutDates={lastCutDates}
-                                avgDailyCuts={avgDailyCuts}
-                                monthlyCutsMap={monthlyCutsMap}
-                              />
-                            </div>
-                          ))
-                        )}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredHierarchy.flatMap(client =>
+                  client.pointsOfSale.flatMap(pos =>
+                    pos.devices.map(ad => (
+                      <div key={ad.device.id} className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
+                          <Building2 className="h-3 w-3 shrink-0" />
+                          <span className="truncate uppercase tracking-wider">{client.name}</span>
+                          <span className="text-muted-foreground/50">·</span>
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{pos.name}</span>
+                        </div>
+                        <DeviceCard
+                          device={ad.device}
+                          lastCutDates={lastCutDates}
+                          avgDailyCuts={avgDailyCuts}
+                          monthlyCutsMap={monthlyCutsMap}
+                        />
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    ))
+                  )
+                )}
                 {filteredHierarchy.length === 0 && (
-                  <div className="py-12 text-center text-muted-foreground">No se encontraron dispositivos</div>
+                  <div className="col-span-full py-12 text-center text-muted-foreground">No se encontraron dispositivos</div>
                 )}
               </div>
             )}
