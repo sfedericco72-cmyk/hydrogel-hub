@@ -14,6 +14,7 @@ import Setup from "./pages/Setup.tsx";
 import ClientsManager from "./pages/ClientsManager.tsx";
 import Auth from "./pages/Auth.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
+import Onboarding from "./pages/Onboarding.tsx";
 
 const queryClient = new QueryClient();
 
