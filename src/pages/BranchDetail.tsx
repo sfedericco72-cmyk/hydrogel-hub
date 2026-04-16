@@ -222,7 +222,7 @@ export default function BranchDetail() {
               <Scissors className="h-4 w-4" />
               Ventas
             </div>
-            <CutsTrafficLights monthlyCuts={monthlyCutsMap?.get(device.fixno)} />
+            <CutsTrafficLights monthlyCuts={filteredMonthlyCuts} />
           </div>
 
           {/* Conexión - Semáforo */}
@@ -254,8 +254,10 @@ export default function BranchDetail() {
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-lg border border-border bg-card p-4 text-center">
             <Scissors className="mx-auto h-5 w-5 text-primary" />
-            <p className="mt-2 text-xl font-bold font-mono">{(device.total_cuts ?? 0).toLocaleString("es-AR")}</p>
-            <p className="text-xs text-muted-foreground">Cortes totales</p>
+            <p className="mt-2 text-xl font-bold font-mono">{totalCutsSinceAssignment.toLocaleString("es-AR")}</p>
+            <p className="text-xs text-muted-foreground">
+              Cortes totales{assignmentStartDate ? ` (desde ${new Date(assignmentStartDate + "T00:00:00").toLocaleDateString("es-CL")})` : ""}
+            </p>
           </div>
           <div className="rounded-lg border border-border bg-card p-4 text-center">
             <Package className="mx-auto h-5 w-5 text-muted-foreground" />
