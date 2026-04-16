@@ -159,9 +159,9 @@ export function isStock(device: Device): boolean {
 /**
  * 4-state classification:
  * - stock: no branch_name or branch_name === fixno
- * - active: had cuts in last N months AND connected recently
- * - inactive: no cuts in last N months (but may be connected)
- * - disconnected: no internet connection beyond threshold
+ * - disconnected: no internet connection >7 days
+ * - active: had cuts in last N months
+ * - inactive: no cuts in last N months
  *
  * Priority: stock > disconnected > inactive > active
  */
@@ -169,11 +169,11 @@ export function getDeviceState(
   device: Device,
   lastCutDates: Map<string, string> | undefined,
   disconnectMonths = 3,
-  connectionThresholdDays = 14
+  connectionThresholdDays = 7
 ): DeviceState {
   if (isStock(device)) return "stock";
 
-  // Check internet connection
+  // Check internet connection (>7 days = disconnected)
   const isDisconnected = (() => {
     if (!device.latest_online_time) return true;
     const last = new Date(device.latest_online_time);
@@ -203,6 +203,14 @@ export const DEVICE_STATE_LABELS: Record<DeviceState, string> = {
   inactive: "Inactivo",
   disconnected: "Desconectado",
 };
+
+/** Get disconnection days for display */
+export function getDisconnectionDays(device: Device): number | null {
+  if (!device.latest_online_time) return null;
+  const last = new Date(device.latest_online_time);
+  const now = new Date();
+  return Math.round((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+}
 
 /**
  * Connection level based on latest_online_time:

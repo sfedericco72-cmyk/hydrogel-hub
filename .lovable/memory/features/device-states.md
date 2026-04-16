@@ -5,9 +5,9 @@ type: feature
 ---
 ## Device States (4 states)
 - **En Stock**: no branch_name or branch_name === fixno
-- **Activo**: had cuts in last 3 months AND connected (≤14 days)
-- **Inactivo**: no cuts in last 3 months (but connected)
-- **Desconectado**: no internet connection >14 days
+- **Activo**: had cuts in last 3 months (and connected ≤7 days)
+- **Inactivo**: no cuts in last 3 months (but connected ≤7 days)
+- **Desconectado**: no internet connection >7 days
 
 Priority: stock > disconnected > inactive > active
 
@@ -19,8 +19,8 @@ Priority: stock > disconnected > inactive > active
 
 ### Conexión (1 light)
 - Green: connected in last 7 days
-- Yellow: connected in last 14 days
-- Red: more than 14 days without connection
+- Red: more than 7 days without connection
+- Always show days of disconnection
 
 ## Alerts
 - **Stock bajo**: remaining_cuts / avg_daily_cuts < 7 days. Fallback: ≤10 cuts if no history.
