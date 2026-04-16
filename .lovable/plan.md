@@ -1,55 +1,78 @@
 
-## Problema detectado
 
-Sí, ya sé cuál es el problema.
+## Plan: Aislar datos por tenant (multi-tenant RLS)
 
-El onboarding sí se está guardando en el backend. Lo confirmé porque tu usuario ya tiene:
-- `profiles.tenant_id` con valor
-- `tenant_settings` con las credenciales CutABC cargadas
+### Problema
+Todas las tablas de datos usan `USING (true)` en RLS. Cualquier usuario autenticado ve todos los registros de todos los tenants.
 
-O sea: la creación del tenant funciona. El bug está en la navegación.
+### Solución
 
-La pantalla donde quedás “quieto” encaja con esto:
-- terminás el wizard
-- la app vuelve a `/onboarding`
-- esa ruta no tiene una salida automática cuando el onboarding ya quedó completo
-- entonces te quedás atrapado ahí, incluso con los datos ya guardados
+**1. Crear función helper `get_user_tenant_id()`**
+- Función SECURITY DEFINER que devuelve el `tenant_id` del usuario autenticado desde `profiles`
+- Se usa en todas las políticas RLS para filtrar por tenant
 
-## Plan
+**2. Actualizar RLS en tablas con `tenant_id`**
 
-1. **Arreglar el guard de rutas para que sea bidireccional**
-   - Si falta onboarding y estás en una ruta normal: redirigir a `/onboarding`
-   - Si el onboarding ya está completo y seguís en `/onboarding`: redirigir a `/`
+Tablas que YA tienen `tenant_id`: `clients`, `devices`
+- Cambiar SELECT/INSERT/UPDATE/DELETE policies de `true` a `tenant_id = get_user_tenant_id()`
 
-2. **Separar mejor la lógica de la ruta onboarding**
-   - Ajustar `ProtectedRoute` o crear un wrapper específico para `/onboarding`
-   - Actualizar `App.tsx` para usar esa lógica sin ambigüedades
+**3. Agregar `tenant_id` a tablas que NO lo tienen**
 
-3. **Hacer más robusta la salida del wizard**
-   - En `Onboarding.tsx`, después de guardar, revalidar perfil/configuración del usuario
-   - Recién después navegar al dashboard
-   - Mantener el estado de carga hasta que esa confirmación termine
+| Tabla | Acción |
+|-------|--------|
+| `points_of_sale` | Agregar `tenant_id uuid`, popular desde `clients.tenant_id` via `client_id` |
+| `device_assignments` | Agregar `tenant_id uuid`, popular desde `devices.tenant_id` via `device_id` |
+| `equipment_sales` | Agregar `tenant_id uuid` |
+| `device_cuts_history` | Filtrar via JOIN con devices (por `fixno`) — o agregar `tenant_id` |
+| `device_transactions` | Idem |
+| `cuts_history_backfill` | Mantener global (es operacional) |
 
-4. **Endurecer el manejo de errores**
-   - No asumir “todo bien” si falla la lectura del estado de onboarding
-   - Agregar logs temporales en la decisión de redirección para validar el flujo exacto
+**4. Actualizar `useTenantSettings` hook**
+- Cambiar de `.eq("tenant_name", "bitec")` a filtrar por `tenant_id` del usuario actual (obteniéndolo de profiles)
 
-5. **Validar el flujo completo**
-   - Completar onboarding con el usuario de prueba
-   - Confirmar llegada al dashboard
-   - Refrescar manualmente `/onboarding` y verificar que te saque a `/`
-   - Cerrar sesión y volver a entrar para confirmar que el wizard no reaparece
+**5. Actualizar código frontend**
+- Todos los INSERT deben incluir `tenant_id` del usuario
+- Hooks como `useClients`, `useDevices` ya no necesitan filtro manual — RLS lo hace
 
-## Archivos a tocar
+**6. Limpiar cuenta huérfana**
+- El perfil `aef452e2` sin tenant se puede dejar (el onboarding lo atrapa)
 
-- `src/components/ProtectedRoute.tsx`
-- `src/App.tsx`
-- `src/pages/Onboarding.tsx`
-- opcional: `src/components/OnboardingRoute.tsx`
+### Migración SQL (resumen)
 
-## Detalles técnicos
+```sql
+-- Helper function
+CREATE FUNCTION get_user_tenant_id() RETURNS uuid ...
 
-La evidencia actual apunta a un problema de redirección, no de persistencia:
-- `profiles` ya devuelve `tenant_id`
-- `tenant_settings` ya devuelve `cutabc_company_no`, `cutabc_username` y `cutabc_password`
-- por eso no hace falta rehacer la migración ni el RPC; hay que corregir el flujo de ruta después del guardado
+-- Add tenant_id where missing
+ALTER TABLE points_of_sale ADD COLUMN tenant_id uuid;
+ALTER TABLE device_assignments ADD COLUMN tenant_id uuid;
+ALTER TABLE equipment_sales ADD COLUMN tenant_id uuid;
+
+-- Backfill existing data
+UPDATE points_of_sale SET tenant_id = (SELECT tenant_id FROM clients WHERE clients.id = points_of_sale.client_id);
+UPDATE device_assignments SET tenant_id = (SELECT tenant_id FROM devices WHERE devices.id = device_assignments.device_id);
+UPDATE equipment_sales SET tenant_id = 'c10e00fe-...'; -- all belong to Bitec
+
+-- Replace all permissive RLS policies with tenant-scoped ones
+-- Example: clients SELECT
+DROP POLICY "Authenticated can read clients" ON clients;
+CREATE POLICY "Tenant can read clients" ON clients FOR SELECT TO authenticated
+  USING (tenant_id = get_user_tenant_id());
+```
+
+### Archivos a modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | Función helper + ALTER TABLEs + nuevas RLS policies |
+| `src/hooks/useTenantSettings.ts` | Filtrar por tenant_id del usuario en vez de hardcoded "bitec" |
+| `src/hooks/useClients.ts` | Agregar tenant_id en INSERTs |
+| `src/pages/ClientsManager.tsx` | Pasar tenant_id al crear clientes/PdV |
+| Edge functions (`sync-cutabc`, `check-alerts`) | Iterar por tenant o filtrar por tenant_id |
+
+### Estimación
+~3-4 mensajes: migración grande + actualización de hooks + edge functions
+
+### Nota sobre la cuenta Google
+Después de este cambio, cuando entres con Google verás solo los datos de TestNuevoTenant (que está vacío). Bitec queda aislado para santiago.federico@bitec.cl.
+
