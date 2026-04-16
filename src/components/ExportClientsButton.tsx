@@ -206,7 +206,7 @@ export function ExportClientsButton() {
         "Cortes totales": d.total_cuts ?? 0,
         "Cortes restantes": d.remaining_cuts ?? 0,
         "Última conexión": fmtDate(d.latest_online_time),
-        "Nombre origen (CutABC)": d.branch_name || d.customer_name || "",
+        "Nombre equipo (CutABC)": d.branch_name || "",
         "Dirección origen": d.address || "",
         "Ciudad origen": d.city || "",
       }));
