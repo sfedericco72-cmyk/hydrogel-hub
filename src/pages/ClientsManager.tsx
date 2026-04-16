@@ -318,7 +318,7 @@ function AssignDeviceDialog({
                     >
                       <Cpu className="w-3.5 h-3.5 shrink-0 text-primary" />
                       <span className="font-mono">{d.fixno}</span>
-                      <span className="text-muted-foreground truncate">— {d.customer_name || d.branch_name || "Sin nombre"}</span>
+                      <span className="text-muted-foreground truncate">— {d.branch_name || d.customer_name || "Sin nombre"}</span>
                     </button>
                   ))
                 )}
