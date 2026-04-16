@@ -4,7 +4,7 @@ import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activit
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
-import { useAssignedHierarchy, flatDevicesFromHierarchy, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
+import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
 import { useDefaultTenant } from "@/hooks/useClients";
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,10 +41,50 @@ export default function Dashboard() {
   const { data: tenant } = useDefaultTenant();
   const { data: hierarchy = [], isLoading } = useAssignedHierarchy(tenant?.id);
   const allDevices = useMemo(() => flatDevicesFromHierarchy(hierarchy), [hierarchy]);
+  const startDates = useMemo(() => assignmentStartDates(hierarchy), [hierarchy]);
 
-  const { data: lastCutDates } = useLastCutDates();
-  const { data: avgDailyCuts } = useAvgDailyCuts();
-  const { data: monthlyCutsMap } = useMonthlyCutsMap();
+  const { data: rawLastCutDates } = useLastCutDates();
+  const { data: rawAvgDailyCuts } = useAvgDailyCuts();
+  const { data: rawMonthlyCutsMap } = useMonthlyCutsMap();
+
+  // Filter cuts data to only include records from the assignment start date
+  const lastCutDates = useMemo(() => {
+    if (!rawLastCutDates) return undefined;
+    const filtered = new Map<string, string>();
+    rawLastCutDates.forEach((date, fixno) => {
+      const start = startDates.get(fixno);
+      if (start && date >= start) filtered.set(fixno, date);
+      else if (!start) { /* not assigned, skip */ }
+    });
+    return filtered;
+  }, [rawLastCutDates, startDates]);
+
+  const avgDailyCuts = useMemo(() => {
+    // avgDailyCuts already only considers last 30 days, but we still need to
+    // exclude devices that aren't assigned
+    if (!rawAvgDailyCuts) return undefined;
+    const filtered = new Map<string, number>();
+    rawAvgDailyCuts.forEach((avg, fixno) => {
+      if (startDates.has(fixno)) filtered.set(fixno, avg);
+    });
+    return filtered;
+  }, [rawAvgDailyCuts, startDates]);
+
+  const monthlyCutsMap = useMemo(() => {
+    if (!rawMonthlyCutsMap) return undefined;
+    const filtered = new Map<string, Map<string, number>>();
+    rawMonthlyCutsMap.forEach((monthMap, fixno) => {
+      const start = startDates.get(fixno);
+      if (!start) return;
+      const startMonth = start.slice(0, 7); // YYYY-MM
+      const filteredMonths = new Map<string, number>();
+      monthMap.forEach((cuts, month) => {
+        if (month >= startMonth) filteredMonths.set(month, cuts);
+      });
+      if (filteredMonths.size > 0) filtered.set(fixno, filteredMonths);
+    });
+    return filtered;
+  }, [rawMonthlyCutsMap, startDates]);
 
   const lastSyncDate = useMemo(() => {
     if (allDevices.length === 0) return null;
