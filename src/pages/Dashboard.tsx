@@ -1,6 +1,7 @@
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, TrendingUp, Settings, MapPin, AlertTriangle, LogOut } from "lucide-react";
+import WelcomeBanner from "@/components/WelcomeBanner";
+import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, TrendingUp, Settings, MapPin, AlertTriangle, LogOut, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
+  const [welcomeForceOpen, setWelcomeForceOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -165,7 +167,16 @@ export default function Dashboard() {
           onSync={handleSync}
           clientFilter={clientFilter}
           navigate={navigate}
+          onShowWelcome={() => setWelcomeForceOpen(true)}
         />
+
+        {/* Welcome banner (beta + acceso por invitación) */}
+        <div className="mb-6">
+          <WelcomeBanner
+            forceOpen={welcomeForceOpen}
+            onDismiss={() => setWelcomeForceOpen(false)}
+          />
+        </div>
 
         {isEmpty ? (
           <EmptyState navigate={navigate} />
