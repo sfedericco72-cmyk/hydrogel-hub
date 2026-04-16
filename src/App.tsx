@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index.tsx";
 import BranchDetail from "./pages/BranchDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -11,6 +12,8 @@ import Unsubscribe from "./pages/Unsubscribe.tsx";
 import AttachRate from "./pages/AttachRate.tsx";
 import Setup from "./pages/Setup.tsx";
 import ClientsManager from "./pages/ClientsManager.tsx";
+import Auth from "./pages/Auth.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 
 const queryClient = new QueryClient();
 
@@ -21,13 +24,15 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/sucursal/:id" element={<BranchDetail />} />
-          <Route path="/attach-rate" element={<AttachRate />} />
-          <Route path="/emails" element={<DeviceEmails />} />
-          <Route path="/clientes" element={<ClientsManager />} />
-          <Route path="/setup" element={<Setup />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/unsubscribe" element={<Unsubscribe />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/sucursal/:id" element={<ProtectedRoute><BranchDetail /></ProtectedRoute>} />
+          <Route path="/attach-rate" element={<ProtectedRoute><AttachRate /></ProtectedRoute>} />
+          <Route path="/emails" element={<ProtectedRoute><DeviceEmails /></ProtectedRoute>} />
+          <Route path="/clientes" element={<ProtectedRoute><ClientsManager /></ProtectedRoute>} />
+          <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

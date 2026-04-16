@@ -1,6 +1,6 @@
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp, Settings, MapPin, AlertTriangle } from "lucide-react";
+import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp, Settings, MapPin, AlertTriangle, LogOut } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
@@ -313,6 +313,10 @@ function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate
         <button onClick={() => navigate("/setup")}
           className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent">
           <Settings className="h-4 w-4" />
+        </button>
+        <button onClick={() => { supabase.auth.signOut(); navigate("/auth"); }}
+          className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground">
+          <LogOut className="h-4 w-4" />
         </button>
       </div>
     </div>

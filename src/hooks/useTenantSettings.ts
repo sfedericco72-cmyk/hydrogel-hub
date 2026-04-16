@@ -26,7 +26,7 @@ export function useTenantSettings() {
       const { data, error } = await supabase
         .from("tenant_settings")
         .select("*")
-        .eq("tenant_name", "default")
+        .eq("tenant_name", "bitec")
         .single();
 
       if (error) throw error;
@@ -42,7 +42,7 @@ export function useUpdateTenantSettings() {
       const { data, error } = await supabase
         .from("tenant_settings")
         .update(updates)
-        .eq("tenant_name", "default")
+        .eq("tenant_name", "bitec")
         .select()
         .single();
 
