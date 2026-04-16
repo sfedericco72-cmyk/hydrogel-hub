@@ -103,7 +103,7 @@ export default function Dashboard() {
   const scopedDevices = useMemo(() => flatDevicesFromHierarchy(scopedHierarchy), [scopedHierarchy]);
 
   const stateCounts = useMemo(() => {
-    const counts: Record<DeviceState, number> = { stock: 0, active: 0, disconnected: 0 };
+    const counts: Record<DeviceState, number> = { stock: 0, active: 0, inactive: 0, disconnected: 0 };
     scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
     return counts;
   }, [scopedDevices, lastCutDates]);
@@ -185,6 +185,9 @@ export default function Dashboard() {
                   <FilterBtn active={stateFilter === "disconnected"} onClick={() => toggleStateFilter("disconnected")} warning>
                     <WifiOff className="mr-1 inline h-3.5 w-3.5" />
                     Desconectados ({stateCounts.disconnected})
+                  </FilterBtn>
+                  <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} warning>
+                    Inactivos ({stateCounts.inactive})
                   </FilterBtn>
                   <FilterBtn active={stateFilter === "stock"} onClick={() => toggleStateFilter("stock")}>
                     <Package className="mr-1 inline h-3.5 w-3.5" />

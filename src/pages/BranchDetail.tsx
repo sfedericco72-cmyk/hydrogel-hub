@@ -198,6 +198,7 @@ export default function BranchDetail() {
             const deviceState = device ? getDeviceState(device, lastCutDates) : "stock";
             const stateStatusMap: Record<string, "online" | "offline" | "warning"> = {
               active: "online",
+              inactive: "warning",
               disconnected: "offline",
               stock: "offline",
             };

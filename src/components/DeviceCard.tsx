@@ -8,6 +8,7 @@ import { StatusBadge } from "./StatusBadge";
 const stateStatusMap: Record<DeviceState, "online" | "offline" | "warning"> = {
   stock: "warning",
   active: "online",
+  inactive: "warning",
   disconnected: "offline",
 };
 
