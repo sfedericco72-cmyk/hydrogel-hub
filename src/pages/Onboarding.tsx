@@ -90,6 +90,9 @@ export default function Onboarding() {
 
       toast.success("¡Configuración completa! Sincronizando dispositivos...");
       supabase.functions.invoke("sync-cutabc").catch(() => {});
+
+      // Small delay to let ProtectedRoute re-check fresh data
+      await new Promise(r => setTimeout(r, 500));
       navigate("/", { replace: true });
     } catch (e: any) {
       toast.error("Error al guardar: " + e.message);

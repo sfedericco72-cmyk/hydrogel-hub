@@ -5,32 +5,31 @@ import type { Session } from "@supabase/supabase-js";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | undefined>(undefined);
+  const [onboardingDone, setOnboardingDone] = useState<boolean | undefined>(undefined);
   const location = useLocation();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  // Check if tenant needs onboarding (no CutABC credentials)
   useEffect(() => {
     if (!session) {
-      setNeedsOnboarding(undefined);
+      setOnboardingDone(undefined);
       return;
     }
 
-    // Reset to show spinner while re-checking
-    setNeedsOnboarding(undefined);
+    // Always re-check when path changes
+    setOnboardingDone(undefined);
 
-    async function checkOnboarding() {
+    let cancelled = false;
+
+    async function check() {
       try {
         const { data: profile } = await supabase
           .from("profiles")
@@ -38,8 +37,10 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
           .eq("id", session!.user.id)
           .single();
 
+        if (cancelled) return;
+
         if (!profile?.tenant_id) {
-          setNeedsOnboarding(true);
+          setOnboardingDone(false);
           return;
         }
 
@@ -49,17 +50,21 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
           .eq("tenant_id", profile.tenant_id)
           .single();
 
-        const hasCreds = !!(settings?.cutabc_company_no && settings?.cutabc_username && settings?.cutabc_password);
-        setNeedsOnboarding(!hasCreds);
+        if (cancelled) return;
+
+        const done = !!(settings?.cutabc_company_no && settings?.cutabc_username && settings?.cutabc_password);
+        setOnboardingDone(done);
       } catch {
-        setNeedsOnboarding(false);
+        if (!cancelled) setOnboardingDone(false);
       }
     }
 
-    checkOnboarding();
+    check();
+    return () => { cancelled = true; };
   }, [session, location.pathname]);
 
-  if (session === undefined || (session && needsOnboarding === undefined)) {
+  // Still loading
+  if (session === undefined || (session && onboardingDone === undefined)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -71,8 +76,15 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return <Navigate to="/auth" replace />;
   }
 
-  // Redirect to onboarding if needed (but not if already on /onboarding)
-  if (needsOnboarding && location.pathname !== "/onboarding") {
+  const isOnboardingPage = location.pathname === "/onboarding";
+
+  // Onboarding complete but user is on /onboarding → send to dashboard
+  if (onboardingDone && isOnboardingPage) {
+    return <Navigate to="/" replace />;
+  }
+
+  // Onboarding NOT complete and NOT on /onboarding → send to onboarding
+  if (!onboardingDone && !isOnboardingPage) {
     return <Navigate to="/onboarding" replace />;
   }
 
