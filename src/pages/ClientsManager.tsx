@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
-  useDefaultTenant,
   useClients,
   useCreateClient,
   useUpdateClient,
@@ -24,6 +23,7 @@ import {
   useUnassignDevice,
   useUnassignedDevices,
 } from "@/hooks/useClients";
+import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
@@ -166,11 +166,13 @@ function PdVDialog({
   open,
   onClose,
   clientId,
+  tenantId,
   editPdV,
 }: {
   open: boolean;
   onClose: () => void;
   clientId: string;
+  tenantId: string;
   editPdV?: { id: string; name: string; address: string | null; city: string | null } | null;
 }) {
   const [name, setName] = useState(editPdV?.name || "");
@@ -191,7 +193,7 @@ function PdVDialog({
         await update.mutateAsync({ id: editPdV.id, name: trimmed, address: address.trim() || null });
         toast.success("Punto de venta actualizado");
       } else {
-        await create.mutateAsync({ client_id: clientId, name: trimmed, address: address.trim() || null });
+        await create.mutateAsync({ client_id: clientId, tenant_id: tenantId, name: trimmed, address: address.trim() || null });
         toast.success("Punto de venta creado");
       }
       onClose();
@@ -249,7 +251,7 @@ function AssignDeviceDialog({
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [search, setSearch] = useState("");
   const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const { data: unassigned = [] } = useUnassignedDevices(tenantId);
+  const { data: unassigned = [] } = useUnassignedDevices();
   const assign = useAssignDevice();
 
   const filtered = unassigned.filter((d) => {
@@ -269,7 +271,7 @@ function AssignDeviceDialog({
     }
     try {
       const assignedAt = new Date(assignDate + "T00:00:00").toISOString();
-      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, assigned_at: assignedAt });
+      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, tenant_id: tenantId, assigned_at: assignedAt });
       toast.success("Equipo asignado");
       setSelectedDeviceId("");
       setSearch("");
@@ -570,6 +572,7 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
               open={pdvDialogOpen}
               onClose={() => { setPdvDialogOpen(false); setEditPdV(null); }}
               clientId={client.id}
+              tenantId={tenantId}
               editPdV={editPdV}
             />
           )}
@@ -587,8 +590,8 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
 
 export default function ClientsManager() {
   const navigate = useNavigate();
-  const { data: tenant } = useDefaultTenant();
-  const { data: clients = [], isLoading } = useClients(tenant?.id);
+  const { data: tenantId } = useUserTenantId();
+  const { data: clients = [], isLoading } = useClients();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -641,19 +644,19 @@ export default function ClientsManager() {
           </Card>
         ) : (
           clients.map((client) => (
-            <ClientCard key={client.id} client={client} tenantId={tenant!.id} />
+            <ClientCard key={client.id} client={client} tenantId={tenantId!} />
           ))
         )}
       </main>
 
-      {createOpen && tenant && (
-        <ClientDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenant.id} />
+      {createOpen && tenantId && (
+        <ClientDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} />
       )}
-      {importOpen && tenant && (
+      {importOpen && tenantId && (
         <ImportClientsDialog
           open={importOpen}
           onClose={() => setImportOpen(false)}
-          tenantId={tenant.id}
+          tenantId={tenantId}
           existingNames={clients.map((c) => c.name)}
         />
       )}

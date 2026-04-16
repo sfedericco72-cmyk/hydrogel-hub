@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserTenantId } from "./useUserTenantId";
 
 export interface TenantSettings {
   id: string;
@@ -20,13 +21,16 @@ export interface TenantSettings {
 }
 
 export function useTenantSettings() {
+  const { data: tenantId } = useUserTenantId();
+
   return useQuery({
-    queryKey: ["tenant-settings"],
+    queryKey: ["tenant-settings", tenantId],
+    enabled: !!tenantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_settings")
         .select("*")
-        .eq("tenant_name", "bitec")
+        .eq("tenant_id", tenantId!)
         .single();
 
       if (error) throw error;
@@ -37,12 +41,15 @@ export function useTenantSettings() {
 
 export function useUpdateTenantSettings() {
   const qc = useQueryClient();
+  const { data: tenantId } = useUserTenantId();
+
   return useMutation({
     mutationFn: async (updates: Partial<Omit<TenantSettings, "id" | "tenant_name" | "created_at" | "updated_at">>) => {
+      if (!tenantId) throw new Error("No tenant");
       const { data, error } = await supabase
         .from("tenant_settings")
         .update(updates)
-        .eq("tenant_name", "bitec")
+        .eq("tenant_id", tenantId)
         .select()
         .single();
 

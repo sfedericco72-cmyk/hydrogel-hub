@@ -7,16 +7,15 @@ export type PointOfSale = Tables<"points_of_sale">;
 export type DeviceAssignment = Tables<"device_assignments">;
 
 // ── Clients ──────────────────────────────────────────────
+// RLS now filters by tenant automatically
 
-export function useClients(tenantId?: string) {
+export function useClients() {
   return useQuery({
-    queryKey: ["clients", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["clients"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
         .select("*")
-        .eq("tenant_id", tenantId!)
         .order("name");
       if (error) throw error;
       return data as Client[];
@@ -77,23 +76,13 @@ export function usePointsOfSale(clientId?: string) {
   });
 }
 
-export function useAllPointsOfSale(tenantId?: string) {
+export function useAllPointsOfSale() {
   return useQuery({
-    queryKey: ["points-of-sale-all", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["points-of-sale-all"],
     queryFn: async () => {
-      // Get all PdVs for clients belonging to this tenant
-      const { data: clients, error: cErr } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("tenant_id", tenantId!);
-      if (cErr) throw cErr;
-      if (!clients?.length) return [];
-      const clientIds = clients.map((c) => c.id);
       const { data, error } = await supabase
         .from("points_of_sale")
         .select("*, clients(name)")
-        .in("client_id", clientIds)
         .order("name");
       if (error) throw error;
       return data;
@@ -204,12 +193,12 @@ export function useUnassignDevice() {
   });
 }
 
-export function useUnassignedDevices(tenantId?: string) {
+export function useUnassignedDevices() {
   return useQuery({
-    queryKey: ["unassigned-devices", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["unassigned-devices"],
     queryFn: async () => {
       // Get devices that have no active assignment
+      // RLS already filters by tenant
       const { data: assigned, error: aErr } = await supabase
         .from("device_assignments")
         .select("device_id")
@@ -218,38 +207,13 @@ export function useUnassignedDevices(tenantId?: string) {
 
       const assignedIds = (assigned || []).map((a) => a.device_id);
 
-      let query = supabase
+      const { data, error } = await supabase
         .from("devices")
         .select("id, fixno, customer_name, branch_name, status")
-        .eq("tenant_id", tenantId!);
-
-      if (assignedIds.length > 0) {
-        // Filter out assigned devices — supabase doesn't have NOT IN, use workaround
-        const { data, error } = await query.order("fixno");
-        if (error) throw error;
-        return (data || []).filter((d) => !assignedIds.includes(d.id));
-      }
-
-      const { data, error } = await query.order("fixno");
+        .order("fixno");
       if (error) throw error;
-      return data || [];
-    },
-  });
-}
 
-// ── Tenant helper ────────────────────────────────────────
-
-export function useDefaultTenant() {
-  return useQuery({
-    queryKey: ["default-tenant"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*")
-        .eq("slug", "bitec")
-        .single();
-      if (error) throw error;
-      return data;
+      return (data || []).filter((d) => !assignedIds.includes(d.id));
     },
   });
 }
