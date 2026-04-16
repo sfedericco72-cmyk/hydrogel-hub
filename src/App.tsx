@@ -7,7 +7,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index.tsx";
 import BranchDetail from "./pages/BranchDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
-import DeviceEmails from "./pages/DeviceEmails.tsx";
+
 import Unsubscribe from "./pages/Unsubscribe.tsx";
 import AttachRate from "./pages/AttachRate.tsx";
 import Setup from "./pages/Setup.tsx";
@@ -32,7 +32,7 @@ const App = () => (
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/sucursal/:id" element={<ProtectedRoute><BranchDetail /></ProtectedRoute>} />
           <Route path="/attach-rate" element={<ProtectedRoute><AttachRate /></ProtectedRoute>} />
-          <Route path="/emails" element={<ProtectedRoute><DeviceEmails /></ProtectedRoute>} />
+          
           <Route path="/clientes" element={<ProtectedRoute><ClientsManager /></ProtectedRoute>} />
           <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
