@@ -26,6 +26,7 @@ import {
 } from "@/hooks/useClients";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
 
 // ── Client Form Dialog ──────────────────────────────────
 
@@ -402,25 +403,11 @@ function PdVRow({
           ) : (
             <div className="space-y-1">
               {assignments.map((a: any) => (
-                <div key={a.id} className="flex items-center justify-between bg-muted/50 rounded px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-sm font-mono">{a.devices?.fixno}</span>
-                    <span className="text-xs text-muted-foreground">{a.devices?.customer_name || ""}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive"
-                    onClick={() => {
-                      if (confirm("¿Desasignar este equipo del punto de venta?")) {
-                        unassign.mutate(a.id);
-                      }
-                    }}
-                  >
-                    <Unplug className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+                <AssignmentRow key={a.id} assignment={a} onUnassign={() => {
+                  if (confirm("¿Desasignar este equipo del punto de venta?")) {
+                    unassign.mutate(a.id);
+                  }
+                }} />
               ))}
             </div>
           )}
