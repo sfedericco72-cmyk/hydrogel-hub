@@ -1,45 +1,55 @@
 
 
-El usuario quiere borrar la cuenta de Google de prueba (TestNuevoTenant) que usó para validar el aislamiento multi-tenant. La sincronización funciona, así que ese tenant de prueba ya no hace falta.
+## Diagnóstico
 
-Necesito identificar qué hay que borrar:
-1. El usuario en `auth.users` (la cuenta Google)
-2. Su `profile` (cascade desde auth.users probablemente)
-3. El tenant `TestNuevoTenant` y todo lo que cuelga de él: `tenant_settings`, `clients`, `points_of_sale`, `device_assignments`, `devices`, `device_cuts_history`, `device_transactions`, `equipment_sales`, etc.
+Los 3 números que mostrás miden cosas diferentes con definiciones distintas de "actividad":
 
-No tengo acceso a inspeccionar la DB ahora (modo plan), pero el plan es claro y acotado.
+### 1. Timeline Abr 26: "Equipos con cortes = 4"
+- Cuenta dispositivos que tienen **cortes en abril 2026** (mes en curso, que recién empieza)
+- Definido en `MonthlyTimeline.tsx`: `devicesWithCuts++` si `cuts > 0` ese mes
+- Solo abril, ventana de ~16 días
 
-## Plan: Borrar cuenta Google de prueba y tenant TestNuevoTenant
+### 2. Timeline Abr 26: "Conectados = 13"
+- Cuenta dispositivos con `latest_online_time` en los **últimos 7 días** (`getConnectionLevel === "green"`)
+- Es conexión a internet, **no** tiene que ver con cortes
+- Por eso conectados (13) + desconectados (13) = 26 total ✓
 
-### Pasos
+### 3. Filtro abajo: "Activos = 14"
+- Usa `getActivityState` → "activo" si tuvo cortes en los **últimos 3 meses** (configurable, `disconnect_months = 3`)
+- Definido en `useDevices.ts`: ventana mucho más amplia que "abril"
 
-**1. Identificar el tenant y usuario a borrar**
-- Buscar en `tenants` el registro con nombre `TestNuevoTenant` (o similar) y obtener su `tenant_id`
-- Buscar en `profiles` los usuarios asociados a ese `tenant_id`
-- Confirmar que es el usuario Google de prueba antes de borrar
+### Por qué los números no calzan
+- **4 ≠ 14**: porque "equipos con cortes en abril" (4) es subconjunto de "equipos con cortes en últimos 3 meses" (14). Los otros 10 cortaron en feb/mar pero todavía no en abril. **Esto es matemáticamente correcto** dada la definición.
+- **Inactivos = 12** y **Activos = 14** suman 26 ✓
+- **Conectados (13) + Desconectados (13) = 26** ✓ (eje conexión a internet)
+- Activos/Inactivos vs Conectados/Desconectados son **dos dimensiones independientes** (memoria `device-states.md` ya lo dice).
 
-**2. Migración SQL para limpieza en cascada**
-Borrar en orden (de hijos a padres) para respetar foreign keys:
-- `device_transactions` where `tenant_id = X`
-- `device_cuts_history` where `tenant_id = X`
-- `device_assignments` where `tenant_id = X`
-- `equipment_sales` where `tenant_id = X`
-- `devices` where `tenant_id = X`
-- `points_of_sale` where `tenant_id = X`
-- `clients` where `tenant_id = X`
-- `tenant_settings` where `tenant_id = X`
-- `user_roles` del usuario Google
-- `profiles` del usuario Google
-- `auth.users` del usuario Google (vía `auth.admin.deleteUser` desde edge function o SQL directo con service role)
-- `tenants` el registro `TestNuevoTenant`
+### El problema real: la UI confunde al usuario
+Tres definiciones coexistiendo sin etiqueta clara:
+- Timeline mezcla **cortes del mes** + **conexión real** en una sola tabla, con un asterisco al pie que es fácil de no leer.
+- Para meses pasados "conectados = equipos con cortes ese mes", para mes actual "conectados = online en últimos 7d". Es **inconsistente entre columnas de la misma fila**.
+- El filtro de abajo dice "Activos (14)" sin aclarar que son últimos 3 meses.
 
-**3. Confirmación**
-Después de borrar, listar tenants restantes para confirmar que solo queda Bitec.
+## Propuesta de fix
 
-### Confirmación necesaria antes de ejecutar
-Antes de correr la migración, voy a:
-- Listar los tenants actuales y sus usuarios para que confirmes cuál es exactamente el que querés borrar (no me quiero llevar puesto Bitec por error)
+**Objetivo: que los números sean comparables y las definiciones explícitas.**
 
-### Archivos
-- 1 migración SQL de limpieza
+### Cambios en `MonthlyTimeline.tsx`
+1. **Renombrar y unificar la fila "Conectados"** → eliminar la doble definición. Dos opciones (te pregunto cuál preferís):
+   - **A)** Una sola fila "Equipos con cortes" (la actual), eliminar Conectados/Desconectados del timeline. La conexión real va aparte.
+   - **B)** Mantener "Equipos con cortes" para todos los meses (consistente), y agregar UNA fila "Online hoy (7d)" que solo muestre un valor, no por mes.
+2. Agregar tooltips en cada fila explicando qué cuenta exactamente.
+3. Resaltar columna del mes actual con nota "mes en curso" para que se entienda que el número es parcial.
+
+### Cambios en filtros (`Dashboard.tsx`)
+1. Tooltip o sub-label en "Activos (14)" → "con cortes en últimos 3 meses".
+2. Tooltip en "Desconectados (13)" → "sin conexión >7 días".
+3. Opcional: badge pequeño bajo el grupo de filtros aclarando que Activo/Inactivo y Conectado/Desconectado son dimensiones independientes (un equipo puede ser Activo + Desconectado).
+
+### Sin cambios en backend
+La data está bien. Es solo presentación + nomenclatura.
+
+## Pregunta para vos
+
+Antes de implementar, necesito decidir el approach del timeline (opción A vs B arriba). Te lo pregunto en cuanto apruebes el plan, o decidilo ahora si tenés clara la preferencia.
 
