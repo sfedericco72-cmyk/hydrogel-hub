@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@tanstack/react-query";
 
 type ClientFilter = "all" | string;
-type StateFilter = "all" | DeviceState;
+type StateFilter = "all" | "active" | "inactive" | "disconnected";
 
 export default function DeviceEmails() {
   const navigate = useNavigate();
@@ -34,12 +34,16 @@ export default function DeviceEmails() {
 
   const filtered = useMemo(() => {
     if (stateFilter === "all") return scopedDevices;
-    return scopedDevices.filter((d) => getDeviceState(d, lastCutDates) === stateFilter);
+    if (stateFilter === "disconnected") return scopedDevices.filter((d) => isDeviceDisconnected(d));
+    return scopedDevices.filter((d) => getActivityState(d, lastCutDates) === stateFilter);
   }, [scopedDevices, stateFilter, lastCutDates]);
 
   const stateCounts = useMemo(() => {
-    const counts: Record<DeviceState, number> = { stock: 0, active: 0, inactive: 0, disconnected: 0 };
-    scopedDevices.forEach((d) => { counts[getDeviceState(d, lastCutDates)]++; });
+    const counts = { active: 0, inactive: 0, disconnected: 0 };
+    scopedDevices.forEach((d) => {
+      counts[getActivityState(d, lastCutDates)]++;
+      if (isDeviceDisconnected(d)) counts.disconnected++;
+    });
     return counts;
   }, [scopedDevices, lastCutDates]);
 
