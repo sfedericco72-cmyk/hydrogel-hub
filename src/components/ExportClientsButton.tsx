@@ -159,28 +159,7 @@ export function ExportClientsButton() {
         }
       }
 
-      // ── Separador visual ──────────────────────────────────
-      const unassignedDevices = devices.filter((d: any) => !assignedDeviceIds.has(d.id));
-      if (unassignedDevices.length > 0) {
-        rows.push({ ...emptyRow() });
-        rows.push({ ...emptyRow(), Cliente: "── EQUIPOS SIN ASIGNAR ──" });
-
-        for (const d of unassignedDevices) {
-          rows.push({
-            ...emptyRow(),
-            Fixno: d.fixno,
-            "Estado equipo": "Sin asignar",
-            Condición: conditionLabel(d.condition),
-            "Notas condición": d.condition_notes || "",
-            Status: d.status || "",
-            "Cortes totales": d.total_cuts ?? 0,
-            "Cortes restantes": d.remaining_cuts ?? 0,
-            "Última conexión": fmtDate(d.latest_online_time),
-          });
-        }
-      }
-
-      // ── Build XLSX ────────────────────────────────────────
+      // ── Build XLSX (Hoja 1: jerárquico) ───────────────────
       const ws = XLSX.utils.json_to_sheet(rows, {
         header: [
           "Cliente",
@@ -207,7 +186,6 @@ export function ExportClientsButton() {
         ],
       });
 
-      // Column widths
       ws["!cols"] = [
         { wch: 28 }, { wch: 14 }, { wch: 20 }, { wch: 24 }, { wch: 14 }, { wch: 30 },
         { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 24 }, { wch: 10 },
@@ -218,9 +196,50 @@ export function ExportClientsButton() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Clientes y Equipos");
 
+      // ── Hoja 2: Equipos sin asignar ───────────────────────
+      const unassignedDevices = devices.filter((d: any) => !assignedDeviceIds.has(d.id));
+      const unassignedRows = unassignedDevices.map((d: any) => ({
+        Fixno: d.fixno,
+        Condición: conditionLabel(d.condition),
+        "Notas condición": d.condition_notes || "",
+        Status: d.status || "",
+        "Cortes totales": d.total_cuts ?? 0,
+        "Cortes restantes": d.remaining_cuts ?? 0,
+        "Última conexión": fmtDate(d.latest_online_time),
+        "Nombre origen (CutABC)": d.branch_name || d.customer_name || "",
+        "Dirección origen": d.address || "",
+        "Ciudad origen": d.city || "",
+      }));
+
+      const ws2 = XLSX.utils.json_to_sheet(
+        unassignedRows.length > 0
+          ? unassignedRows
+          : [{ Fixno: "(no hay equipos sin asignar)" }],
+        {
+          header: [
+            "Fixno",
+            "Condición",
+            "Notas condición",
+            "Status",
+            "Cortes totales",
+            "Cortes restantes",
+            "Última conexión",
+            "Nombre origen (CutABC)",
+            "Dirección origen",
+            "Ciudad origen",
+          ],
+        }
+      );
+      ws2["!cols"] = [
+        { wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 10 },
+        { wch: 12 }, { wch: 14 }, { wch: 18 },
+        { wch: 26 }, { wch: 28 }, { wch: 16 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ws2, "Equipos sin asignar");
+
       const fileName = `clientes-equipos-${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      toast.success("Archivo descargado");
+      toast.success(`Archivo descargado (${unassignedDevices.length} equipos sin asignar)`);
     } catch (e: any) {
       toast.error(e.message || "Error al exportar");
     } finally {
