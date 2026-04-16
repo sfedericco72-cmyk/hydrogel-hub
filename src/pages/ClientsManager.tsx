@@ -26,6 +26,7 @@ import {
 } from "@/hooks/useClients";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
 
 // ── Client Form Dialog ──────────────────────────────────
 
@@ -251,6 +252,7 @@ function AssignDeviceDialog({
 }) {
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [search, setSearch] = useState("");
+  const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
   const { data: unassigned = [] } = useUnassignedDevices(tenantId);
   const assign = useAssignDevice();
 
@@ -270,10 +272,12 @@ function AssignDeviceDialog({
       return;
     }
     try {
-      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId });
+      const assignedAt = new Date(assignDate + "T00:00:00").toISOString();
+      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, assigned_at: assignedAt });
       toast.success("Equipo asignado");
       setSelectedDeviceId("");
       setSearch("");
+      setAssignDate(new Date().toISOString().slice(0, 10));
       onClose();
     } catch (e: any) {
       toast.error(e.message || "Error al asignar equipo");
@@ -322,6 +326,16 @@ function AssignDeviceDialog({
               {filtered.length > 0 && (
                 <p className="text-xs text-muted-foreground">{filtered.length} equipo{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}</p>
               )}
+              <div>
+                <Label>Fecha de inicio de asignación</Label>
+                <Input
+                  type="date"
+                  value={assignDate}
+                  onChange={(e) => setAssignDate(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Los cortes desde esta fecha se contabilizarán para este PdV</p>
+              </div>
             </>
           )}
         </div>
@@ -333,6 +347,39 @@ function AssignDeviceDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Assignment Row with Cuts ─────────────────────────────
+
+function AssignmentRow({ assignment, onUnassign }: { assignment: any; onUnassign: () => void }) {
+  const fixno = assignment.devices?.fixno;
+  const { data: cuts } = useAssignmentCuts(fixno, assignment.assigned_at, assignment.unassigned_at);
+
+  return (
+    <div className="flex items-center justify-between bg-muted/50 rounded px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Cpu className="w-3.5 h-3.5 text-primary" />
+        <span className="text-sm font-mono">{fixno}</span>
+        <span className="text-xs text-muted-foreground">{assignment.devices?.customer_name || ""}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {cuts != null && (
+          <span className="text-xs text-muted-foreground font-mono">{cuts.toLocaleString()} cortes</span>
+        )}
+        <span className="text-xs text-muted-foreground">
+          {new Date(assignment.assigned_at).toLocaleDateString("es-CL")}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={onUnassign}
+        >
+          <Unplug className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -389,25 +436,11 @@ function PdVRow({
           ) : (
             <div className="space-y-1">
               {assignments.map((a: any) => (
-                <div key={a.id} className="flex items-center justify-between bg-muted/50 rounded px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-sm font-mono">{a.devices?.fixno}</span>
-                    <span className="text-xs text-muted-foreground">{a.devices?.customer_name || ""}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive"
-                    onClick={() => {
-                      if (confirm("¿Desasignar este equipo del punto de venta?")) {
-                        unassign.mutate(a.id);
-                      }
-                    }}
-                  >
-                    <Unplug className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+                <AssignmentRow key={a.id} assignment={a} onUnassign={() => {
+                  if (confirm("¿Desasignar este equipo del punto de venta?")) {
+                    unassign.mutate(a.id);
+                  }
+                }} />
               ))}
             </div>
           )}
