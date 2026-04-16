@@ -137,8 +137,9 @@ export default function Onboarding() {
           {step === 0 && (
             <div className="space-y-5">
               <div>
+                <p className="text-sm text-primary font-medium mb-1">¡Bienvenido a CutMonitor! 👋</p>
                 <h2 className="text-xl font-bold">Datos de tu empresa</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Información básica para personalizar tu panel</p>
+                <p className="mt-1 text-sm text-muted-foreground">Vamos a configurar tu cuenta en 3 pasos rápidos. Empecemos con la información básica.</p>
               </div>
               <div className="space-y-3">
                 <div>

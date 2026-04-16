@@ -39,8 +39,9 @@ export default function Auth() {
         });
         if (error) throw error;
         toast({
-          title: "Registro exitoso",
-          description: "Revisa tu correo para confirmar tu cuenta.",
+          title: "¡Cuenta creada!",
+          description: `Te enviamos un email a ${email} para confirmar tu cuenta. Una vez confirmado, podrás iniciar sesión y configurar tu empresa.`,
+          duration: 8000,
         });
       }
     } catch (error: any) {
