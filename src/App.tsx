@@ -14,6 +14,7 @@ import Setup from "./pages/Setup.tsx";
 import ClientsManager from "./pages/ClientsManager.tsx";
 import Auth from "./pages/Auth.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
+import Onboarding from "./pages/Onboarding.tsx";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/unsubscribe" element={<Unsubscribe />} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/sucursal/:id" element={<ProtectedRoute><BranchDetail /></ProtectedRoute>} />
           <Route path="/attach-rate" element={<ProtectedRoute><AttachRate /></ProtectedRoute>} />
