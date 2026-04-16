@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const CONTACT_EMAIL = "cutmonitor@bitec.cl";
 
@@ -157,28 +158,39 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-8 gap-6">
+      <div className="w-full max-w-md space-y-3 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">CutMonitor</h1>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
+            BETA
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Monitoreo en tiempo real de máquinas de corte de hidrogel conectadas a CutABC.
+        </p>
+        <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5 justify-center">
+          <Mail className="h-3.5 w-3.5" />
+          Acceso por invitación · Solicitá autorización a{" "}
+          <a
+            href={`mailto:${CONTACT_EMAIL}?subject=Solicitud%20de%20acceso%20a%20CutMonitor`}
+            className="text-primary hover:underline"
+          >
+            {CONTACT_EMAIL}
+          </a>
+        </p>
+      </div>
+
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">CutMonitor</CardTitle>
+          <CardTitle className="text-2xl font-bold">
+            {isLogin ? "Iniciar sesión" : "Crear cuenta"}
+          </CardTitle>
           <CardDescription>
-            {isLogin ? "Inicia sesión para continuar" : "Crea tu cuenta"}
+            {isLogin ? "Ingresá tus credenciales para continuar" : "Completá los datos para registrarte"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!isLogin && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-muted-foreground flex gap-2">
-              <ShieldAlert className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-              <p>
-                CutMonitor está en <span className="font-medium text-foreground">beta</span> y el acceso es por invitación.
-                Si tu email no fue autorizado, escribí a{" "}
-                <a href={`mailto:${CONTACT_EMAIL}?subject=Solicitud%20de%20acceso%20a%20CutMonitor`} className="text-primary hover:underline">
-                  {CONTACT_EMAIL}
-                </a>{" "}
-                indicando empresa y email.
-              </p>
-            </div>
-          )}
 
           <Button
             variant="outline"
