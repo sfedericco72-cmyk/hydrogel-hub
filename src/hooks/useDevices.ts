@@ -149,42 +149,15 @@ export function hasLowStock(
   return days < lowStockDays;
 }
 
-export type DeviceState = "stock" | "active" | "inactive" | "disconnected";
+export type ActivityState = "active" | "inactive";
+export type DeviceState = ActivityState; // kept for filter compat
 
-/** Check if device is "en stock" (no name or name equals fixno) */
-export function isStock(device: Device): boolean {
-  return !device.branch_name || device.branch_name === device.fixno;
-}
-
-/**
- * 4-state classification:
- * - stock: no branch_name or branch_name === fixno
- * - disconnected: no internet connection >7 days
- * - active: had cuts in last N months
- * - inactive: no cuts in last N months
- *
- * Priority: stock > disconnected > inactive > active
- */
-export function getDeviceState(
+/** Activity based on cuts only */
+export function getActivityState(
   device: Device,
   lastCutDates: Map<string, string> | undefined,
-  disconnectMonths = 3,
-  connectionThresholdDays = 7
-): DeviceState {
-  if (isStock(device)) return "stock";
-
-  // Check internet connection (>7 days = disconnected)
-  const isDisconnected = (() => {
-    if (!device.latest_online_time) return true;
-    const last = new Date(device.latest_online_time);
-    const now = new Date();
-    const diffDays = (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays > connectionThresholdDays;
-  })();
-
-  if (isDisconnected) return "disconnected";
-
-  // Check cuts activity
+  disconnectMonths = 3
+): ActivityState {
   const hasCutsRecently = (() => {
     if (!lastCutDates) return true;
     const lastCut = lastCutDates.get(device.fixno);
@@ -193,16 +166,16 @@ export function getDeviceState(
     cutoff.setMonth(cutoff.getMonth() - disconnectMonths);
     return new Date(lastCut) >= cutoff;
   })();
-
   return hasCutsRecently ? "active" : "inactive";
 }
 
-export const DEVICE_STATE_LABELS: Record<DeviceState, string> = {
-  stock: "En stock",
-  active: "Activo",
-  inactive: "Inactivo",
-  disconnected: "Desconectado",
-};
+/** Internet connection: >7 days = disconnected */
+export function isDeviceDisconnected(device: Device, thresholdDays = 7): boolean {
+  if (!device.latest_online_time) return true;
+  const last = new Date(device.latest_online_time);
+  const now = new Date();
+  return (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24) > thresholdDays;
+}
 
 /** Get disconnection days for display */
 export function getDisconnectionDays(device: Device): number | null {
@@ -211,6 +184,22 @@ export function getDisconnectionDays(device: Device): number | null {
   const now = new Date();
   return Math.round((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
 }
+
+// Legacy compat — maps to activity state
+export function getDeviceState(
+  device: Device,
+  lastCutDates: Map<string, string> | undefined,
+  disconnectMonths = 3
+): DeviceState {
+  return getActivityState(device, lastCutDates, disconnectMonths);
+}
+
+export const ACTIVITY_LABELS: Record<ActivityState, string> = {
+  active: "Activo",
+  inactive: "Inactivo",
+};
+
+export const DEVICE_STATE_LABELS = ACTIVITY_LABELS;
 
 /**
  * Connection level based on latest_online_time:
