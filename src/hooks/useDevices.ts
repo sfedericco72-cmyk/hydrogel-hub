@@ -149,8 +149,13 @@ export function hasLowStock(
   return days < lowStockDays;
 }
 
+/** Check if device is "en stock" (no name or name equals fixno) */
+export function isStock(device: Device): boolean {
+  return !device.branch_name || device.branch_name === device.fixno;
+}
+
 export type ActivityState = "active" | "inactive";
-export type DeviceState = ActivityState; // kept for filter compat
+export type DeviceState = ActivityState | "disconnected"; // for filter compat
 
 /** Activity based on cuts only */
 export function getActivityState(
