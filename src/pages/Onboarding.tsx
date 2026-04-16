@@ -54,7 +54,6 @@ export default function Onboarding() {
   async function handleFinish() {
     setSaving(true);
     try {
-      // Get user's profile to find tenant_id
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
@@ -64,29 +63,33 @@ export default function Onboarding() {
         .eq("id", user.id)
         .single();
 
-      if (!profile?.tenant_id) {
-        throw new Error("No se encontró tenant asociado");
+      if (profile?.tenant_id) {
+        // Existing tenant — just update settings
+        const { error } = await supabase
+          .from("tenant_settings")
+          .update({
+            company_name: form.company_name,
+            bcc_email: form.bcc_email || null,
+            cutabc_company_no: form.cutabc_company_no,
+            cutabc_username: form.cutabc_username,
+            cutabc_password: form.cutabc_password,
+          })
+          .eq("tenant_id", profile.tenant_id);
+        if (error) throw error;
+      } else {
+        // New user — create tenant + settings + role atomically
+        const { error } = await supabase.rpc("setup_new_tenant", {
+          _company_name: form.company_name,
+          _bcc_email: form.bcc_email || null,
+          _cutabc_company_no: form.cutabc_company_no,
+          _cutabc_username: form.cutabc_username,
+          _cutabc_password: form.cutabc_password,
+        });
+        if (error) throw error;
       }
 
-      // Update tenant_settings
-      const { error } = await supabase
-        .from("tenant_settings")
-        .update({
-          company_name: form.company_name,
-          bcc_email: form.bcc_email || null,
-          cutabc_company_no: form.cutabc_company_no,
-          cutabc_username: form.cutabc_username,
-          cutabc_password: form.cutabc_password,
-        })
-        .eq("tenant_id", profile.tenant_id);
-
-      if (error) throw error;
-
       toast.success("¡Configuración completa! Sincronizando dispositivos...");
-
-      // Trigger first sync
       supabase.functions.invoke("sync-cutabc").catch(() => {});
-
       navigate("/", { replace: true });
     } catch (e: any) {
       toast.error("Error al guardar: " + e.message);
