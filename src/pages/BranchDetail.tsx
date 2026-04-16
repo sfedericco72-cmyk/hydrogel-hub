@@ -11,6 +11,8 @@ import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 function formatDateTime(dateStr: string | null) {
   if (!dateStr) return "—";
