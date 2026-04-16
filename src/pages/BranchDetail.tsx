@@ -149,8 +149,13 @@ export default function BranchDetail() {
     });
     return filtered;
   }, [device?.fixno, monthlyCutsMap, assignmentStartDate]);
+  const resolutionLabels: Record<TimeResolution, string> = {
+    weekly: "Semanal (últ. 3 meses)",
+    monthly: "Mensual",
+    annual: "Anual",
+  };
 
-  if (isLoading) {
+
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-muted-foreground">Cargando...</p>
