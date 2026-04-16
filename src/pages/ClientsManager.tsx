@@ -166,11 +166,13 @@ function PdVDialog({
   open,
   onClose,
   clientId,
+  tenantId,
   editPdV,
 }: {
   open: boolean;
   onClose: () => void;
   clientId: string;
+  tenantId: string;
   editPdV?: { id: string; name: string; address: string | null; city: string | null } | null;
 }) {
   const [name, setName] = useState(editPdV?.name || "");
