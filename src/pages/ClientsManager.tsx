@@ -684,6 +684,9 @@ export default function ClientsManager() {
           existingNames={clients.map((c) => c.name)}
         />
       )}
+      {pauseOpen && (
+        <GlobalAlertsPauseDialog open={pauseOpen} onClose={() => setPauseOpen(false)} />
+      )}
     </div>
   );
 }
