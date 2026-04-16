@@ -6,8 +6,33 @@ export type Client = Tables<"clients">;
 export type PointOfSale = Tables<"points_of_sale">;
 export type DeviceAssignment = Tables<"device_assignments">;
 
+export type DeviceCondition =
+  | "nuevo"
+  | "usado"
+  | "roto"
+  | "en_reparacion"
+  | "reparado"
+  | "fuera_de_servicio";
+
+export const DEVICE_CONDITION_LABELS: Record<DeviceCondition, string> = {
+  nuevo: "Nuevo",
+  usado: "Usado",
+  roto: "Roto",
+  en_reparacion: "En reparación",
+  reparado: "Reparado",
+  fuera_de_servicio: "Fuera de servicio",
+};
+
+export const DEVICE_CONDITION_VALUES: DeviceCondition[] = [
+  "nuevo",
+  "usado",
+  "roto",
+  "en_reparacion",
+  "reparado",
+  "fuera_de_servicio",
+];
+
 // ── Clients ──────────────────────────────────────────────
-// RLS now filters by tenant automatically
 
 export function useClients() {
   return useQuery({
@@ -161,10 +186,30 @@ export function useDeviceAssignmentHistory(pointOfSaleId?: string) {
   });
 }
 
+/** Active assignment counts per client_id (for "with/without devices" grouping) */
+export function useClientAssignmentCounts() {
+  return useQuery({
+    queryKey: ["client-assignment-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_assignments")
+        .select("point_of_sale_id, points_of_sale(client_id)")
+        .is("unassigned_at", null);
+      if (error) throw error;
+      const counts = new Map<string, number>();
+      (data || []).forEach((row: any) => {
+        const cid = row.points_of_sale?.client_id;
+        if (cid) counts.set(cid, (counts.get(cid) ?? 0) + 1);
+      });
+      return counts;
+    },
+  });
+}
+
 export function useAssignDevice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: TablesInsert<"device_assignments">) => {
+    mutationFn: async (input: TablesInsert<"device_assignments"> & { assignment_reason?: string | null }) => {
       const { data, error } = await supabase.from("device_assignments").insert(input).select().single();
       if (error) throw error;
       return data;
@@ -172,6 +217,7 @@ export function useAssignDevice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["device-assignments"] });
       qc.invalidateQueries({ queryKey: ["unassigned-devices"] });
+      qc.invalidateQueries({ queryKey: ["client-assignment-counts"] });
     },
   });
 }
@@ -179,16 +225,18 @@ export function useAssignDevice() {
 export function useUnassignDevice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (assignmentId: string) => {
+    mutationFn: async ({ assignmentId, reason }: { assignmentId: string; reason?: string | null }) => {
       const { error } = await supabase
         .from("device_assignments")
-        .update({ unassigned_at: new Date().toISOString() })
+        .update({ unassigned_at: new Date().toISOString(), unassignment_reason: reason || null })
         .eq("id", assignmentId);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["device-assignments"] });
+      qc.invalidateQueries({ queryKey: ["device-assignment-history"] });
       qc.invalidateQueries({ queryKey: ["unassigned-devices"] });
+      qc.invalidateQueries({ queryKey: ["client-assignment-counts"] });
     },
   });
 }
@@ -197,8 +245,6 @@ export function useUnassignedDevices() {
   return useQuery({
     queryKey: ["unassigned-devices"],
     queryFn: async () => {
-      // Get devices that have no active assignment
-      // RLS already filters by tenant
       const { data: assigned, error: aErr } = await supabase
         .from("device_assignments")
         .select("device_id")
@@ -209,11 +255,35 @@ export function useUnassignedDevices() {
 
       const { data, error } = await supabase
         .from("devices")
-        .select("id, fixno, customer_name, branch_name, status")
+        .select("id, fixno, customer_name, branch_name, status, latest_online_time, remaining_cuts, condition, condition_notes")
         .order("fixno");
       if (error) throw error;
 
       return (data || []).filter((d) => !assignedIds.includes(d.id));
+    },
+  });
+}
+
+export function useUpdateDeviceCondition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      deviceId,
+      condition,
+      notes,
+    }: {
+      deviceId: string;
+      condition: DeviceCondition | null;
+      notes?: string | null;
+    }) => {
+      const updates: any = { condition };
+      if (notes !== undefined) updates.condition_notes = notes;
+      const { error } = await supabase.from("devices").update(updates).eq("id", deviceId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["unassigned-devices"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
     },
   });
 }

@@ -1,14 +1,18 @@
-import { useState, useMemo, useRef } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, X, Unplug, Upload, History, Calendar, Search, BellOff, Bell } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX } from "lucide-react";
 import { PdVAlertSettings } from "@/components/PdVAlertSettings";
 import { GlobalAlertsPauseDialog } from "@/components/GlobalAlertsPauseDialog";
+import { UnassignedDevicesSection } from "@/components/UnassignedDevicesSection";
+import { UnassignDialog } from "@/components/UnassignDialog";
+import { ExportClientsButton } from "@/components/ExportClientsButton";
 import { useTenantSettings } from "@/hooks/useTenantSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
@@ -25,6 +29,7 @@ import {
   useAssignDevice,
   useUnassignDevice,
   useUnassignedDevices,
+  useClientAssignmentCounts,
 } from "@/hooks/useClients";
 import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
@@ -64,7 +69,6 @@ function ClientDialog({
     }
     try {
       const addrTrimmed = address.trim();
-      // Use lat/lng from autocomplete selection, or try parsing coords from text
       let finalLat = lat;
       let finalLng = lng;
       if (!finalLat && !finalLng) {
@@ -180,7 +184,7 @@ function PdVDialog({
 }) {
   const [name, setName] = useState(editPdV?.name || "");
   const [address, setAddress] = useState(editPdV?.address || "");
-  
+
   const create = useCreatePointOfSale();
   const update = useUpdatePointOfSale();
   const isEdit = !!editPdV;
@@ -245,17 +249,24 @@ function AssignDeviceDialog({
   onClose,
   pointOfSaleId,
   tenantId,
+  preselectedDeviceId,
 }: {
   open: boolean;
   onClose: () => void;
   pointOfSaleId: string;
   tenantId: string;
+  preselectedDeviceId?: string;
 }) {
-  const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [selectedDeviceId, setSelectedDeviceId] = useState(preselectedDeviceId || "");
   const [search, setSearch] = useState("");
+  const [reason, setReason] = useState("");
   const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
   const { data: unassigned = [] } = useUnassignedDevices();
   const assign = useAssignDevice();
+
+  useEffect(() => {
+    if (preselectedDeviceId) setSelectedDeviceId(preselectedDeviceId);
+  }, [preselectedDeviceId]);
 
   const filtered = unassigned.filter((d) => {
     if (!search.trim()) return true;
@@ -274,10 +285,17 @@ function AssignDeviceDialog({
     }
     try {
       const assignedAt = new Date(assignDate + "T00:00:00").toISOString();
-      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, tenant_id: tenantId, assigned_at: assignedAt });
+      await assign.mutateAsync({
+        device_id: selectedDeviceId,
+        point_of_sale_id: pointOfSaleId,
+        tenant_id: tenantId,
+        assigned_at: assignedAt,
+        assignment_reason: reason.trim() || null,
+      });
       toast.success("Equipo asignado");
       setSelectedDeviceId("");
       setSearch("");
+      setReason("");
       setAssignDate(new Date().toISOString().slice(0, 10));
       onClose();
     } catch (e: any) {
@@ -324,9 +342,6 @@ function AssignDeviceDialog({
                   ))
                 )}
               </div>
-              {filtered.length > 0 && (
-                <p className="text-xs text-muted-foreground">{filtered.length} equipo{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}</p>
-              )}
               <div>
                 <Label>Fecha de inicio de asignación</Label>
                 <Input
@@ -336,6 +351,16 @@ function AssignDeviceDialog({
                   max={new Date().toISOString().slice(0, 10)}
                 />
                 <p className="text-xs text-muted-foreground mt-1">Los cortes desde esta fecha se contabilizarán para este PdV</p>
+              </div>
+              <div>
+                <Label>Motivo (opcional)</Label>
+                <Textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Ej: nuevo equipo, reemplazo, traslado..."
+                  rows={2}
+                  maxLength={500}
+                />
               </div>
             </>
           )}
@@ -353,12 +378,20 @@ function AssignDeviceDialog({
 
 // ── Assignment Row with Cuts ─────────────────────────────
 
-function AssignmentRow({ assignment, onUnassign }: { assignment: any; onUnassign: () => void }) {
+function AssignmentRow({
+  assignment,
+  onUnassign,
+  highlight,
+}: {
+  assignment: any;
+  onUnassign: () => void;
+  highlight?: boolean;
+}) {
   const fixno = assignment.devices?.fixno;
   const { data: cuts } = useAssignmentCuts(fixno, assignment.assigned_at, assignment.unassigned_at);
 
   return (
-    <div className="flex items-center justify-between bg-muted/50 rounded px-3 py-2">
+    <div className={`flex items-center justify-between rounded px-3 py-2 ${highlight ? "bg-primary/15 ring-1 ring-primary/40" : "bg-muted/50"}`}>
       <div className="flex items-center gap-2">
         <Cpu className="w-3.5 h-3.5 text-primary" />
         <span className="text-sm font-mono">{fixno}</span>
@@ -391,22 +424,30 @@ function PdVRow({
   tenantId,
   onEdit,
   onDelete,
+  forceExpanded,
+  searchQuery,
 }: {
   pdv: { id: string; name: string; address: string | null; city: string | null };
   tenantId: string;
   onEdit: () => void;
   onDelete: () => void;
+  forceExpanded?: boolean;
+  searchQuery?: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expandedState, setExpanded] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [unassignTarget, setUnassignTarget] = useState<any>(null);
+  const expanded = forceExpanded || expandedState;
   const { data: assignments = [] } = useDeviceAssignments(expanded ? pdv.id : undefined);
   const { data: history = [] } = useDeviceAssignmentHistory(expanded && showHistory ? pdv.id : undefined);
   const unassign = useUnassignDevice();
 
+  const q = searchQuery?.toLowerCase().trim() || "";
+
   return (
     <div className="border border-border rounded-lg bg-secondary/30">
-      <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => !forceExpanded && setExpanded(!expanded)}>
         <div className="flex items-center gap-3">
           {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
           <MapPin className="w-4 h-4 text-primary" />
@@ -425,7 +466,6 @@ function PdVRow({
         <div className="px-4 pb-3 space-y-3">
           {pdv.address && <p className="text-xs text-muted-foreground">{pdv.address}</p>}
 
-          {/* Alert settings */}
           <PdVAlertSettings
             pdv={pdv as any}
             fixnos={assignments.map((a: any) => a.devices?.fixno).filter(Boolean)}
@@ -442,17 +482,23 @@ function PdVRow({
             <p className="text-xs text-muted-foreground italic">Sin equipos asignados</p>
           ) : (
             <div className="space-y-1">
-              {assignments.map((a: any) => (
-                <AssignmentRow key={a.id} assignment={a} onUnassign={() => {
-                  if (confirm("¿Desasignar este equipo del punto de venta?")) {
-                    unassign.mutate(a.id);
-                  }
-                }} />
-              ))}
+              {assignments.map((a: any) => {
+                const matches = !!q && (
+                  a.devices?.fixno?.toLowerCase().includes(q) ||
+                  a.devices?.customer_name?.toLowerCase().includes(q)
+                );
+                return (
+                  <AssignmentRow
+                    key={a.id}
+                    assignment={a}
+                    highlight={matches}
+                    onUnassign={() => setUnassignTarget(a)}
+                  />
+                );
+              })}
             </div>
           )}
 
-          {/* History toggle */}
           <button
             onClick={() => setShowHistory(!showHistory)}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -465,16 +511,28 @@ function PdVRow({
             <div className="space-y-1">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Historial</span>
               {history.map((a: any) => (
-                <div key={a.id} className="flex items-center justify-between bg-muted/20 rounded px-3 py-2 opacity-60">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm font-mono">{a.devices?.fixno}</span>
-                    <span className="text-xs text-muted-foreground">{a.devices?.customer_name || ""}</span>
+                <div key={a.id} className="bg-muted/20 rounded px-3 py-2 opacity-80">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-sm font-mono">{a.devices?.fixno}</span>
+                      <span className="text-xs text-muted-foreground">{a.devices?.customer_name || ""}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(a.assigned_at).toLocaleDateString("es-CL")} — {new Date(a.unassigned_at).toLocaleDateString("es-CL")}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Calendar className="w-3 h-3" />
-                    {new Date(a.assigned_at).toLocaleDateString("es-CL")} — {new Date(a.unassigned_at).toLocaleDateString("es-CL")}
-                  </div>
+                  {(a.assignment_reason || a.unassignment_reason) && (
+                    <div className="mt-1 pl-5 space-y-0.5">
+                      {a.assignment_reason && (
+                        <p className="text-xs text-muted-foreground"><span className="text-foreground/70">Asignación:</span> {a.assignment_reason}</p>
+                      )}
+                      {a.unassignment_reason && (
+                        <p className="text-xs text-muted-foreground"><span className="text-foreground/70">Desasignación:</span> {a.unassignment_reason}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -484,6 +542,22 @@ function PdVRow({
           )}
 
           <AssignDeviceDialog open={assignOpen} onClose={() => setAssignOpen(false)} pointOfSaleId={pdv.id} tenantId={tenantId} />
+          <UnassignDialog
+            open={!!unassignTarget}
+            onClose={() => setUnassignTarget(null)}
+            fixno={unassignTarget?.devices?.fixno}
+            pdvName={pdv.name}
+            isPending={unassign.isPending}
+            onConfirm={async (reason) => {
+              try {
+                await unassign.mutateAsync({ assignmentId: unassignTarget.id, reason });
+                toast.success("Equipo desasignado");
+                setUnassignTarget(null);
+              } catch (e: any) {
+                toast.error(e.message || "Error al desasignar");
+              }
+            }}
+          />
         </div>
       )}
     </div>
@@ -492,18 +566,31 @@ function PdVRow({
 
 // ── Client Card ─────────────────────────────────────────
 
-function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
-  const [expanded, setExpanded] = useState(false);
+function ClientCard({
+  client,
+  tenantId,
+  forceExpanded,
+  searchQuery,
+  matchedPdvIds,
+}: {
+  client: any;
+  tenantId: string;
+  forceExpanded?: boolean;
+  searchQuery?: string;
+  matchedPdvIds?: Set<string>;
+}) {
+  const [expandedState, setExpanded] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [pdvDialogOpen, setPdvDialogOpen] = useState(false);
   const [editPdV, setEditPdV] = useState<any>(null);
   const deleteClient = useDeleteClient();
   const deletePdV = useDeletePointOfSale();
+  const expanded = forceExpanded || expandedState;
   const { data: pdvs = [] } = usePointsOfSale(expanded ? client.id : undefined);
 
   return (
     <Card className="bg-card border-border">
-      <CardHeader className="pb-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      <CardHeader className="pb-2 cursor-pointer" onClick={() => !forceExpanded && setExpanded(!expanded)}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
@@ -565,6 +652,8 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
                   key={pdv.id}
                   pdv={pdv}
                   tenantId={tenantId}
+                  forceExpanded={matchedPdvIds?.has(pdv.id)}
+                  searchQuery={searchQuery}
                   onEdit={() => { setEditPdV(pdv); setPdvDialogOpen(true); }}
                   onDelete={() => {
                     if (confirm(`¿Eliminar punto de venta "${pdv.name}"?`)) {
@@ -595,6 +684,60 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
   );
 }
 
+// ── Group Section ───────────────────────────────────────
+
+function ClientGroup({
+  title,
+  icon: Icon,
+  clients,
+  tenantId,
+  defaultOpen,
+  searchQuery,
+  matchedPdvByClient,
+  forceExpandClients,
+}: {
+  title: string;
+  icon: any;
+  clients: any[];
+  tenantId: string;
+  defaultOpen: boolean;
+  searchQuery: string;
+  matchedPdvByClient: Map<string, Set<string>>;
+  forceExpandClients: Set<string>;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (clients.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        <Icon className="w-4 h-4" />
+        <span className="uppercase tracking-wide">{title}</span>
+        <Badge variant="secondary" className="ml-1 text-xs">{clients.length}</Badge>
+      </button>
+      {open && (
+        <div className="space-y-3 pl-1">
+          {clients.map((client) => (
+            <ClientCard
+              key={client.id}
+              client={client}
+              tenantId={tenantId}
+              forceExpanded={forceExpandClients.has(client.id)}
+              searchQuery={searchQuery}
+              matchedPdvIds={matchedPdvByClient.get(client.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────
 
 export default function ClientsManager() {
@@ -602,19 +745,129 @@ export default function ClientsManager() {
   const { data: tenantId } = useUserTenantId();
   const { data: clients = [], isLoading } = useClients();
   const { data: settings } = useTenantSettings();
+  const { data: assignmentCounts } = useClientAssignmentCounts();
+  const { data: unassignedDevices = [] } = useUnassignedDevices();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [assignFromUnassigned, setAssignFromUnassigned] = useState<{ deviceId: string } | null>(null);
+  const [pickPdvOpen, setPickPdvOpen] = useState(false);
 
   const isPaused = settings?.alerts_paused_until
     ? new Date(settings.alerts_paused_until).getTime() > Date.now()
     : false;
 
+  // Search-driven expansion data: which PdV / clients to auto-expand
+  const [searchMatches, setSearchMatches] = useState<{
+    matchedPdvByClient: Map<string, Set<string>>;
+    forceExpandClients: Set<string>;
+  }>({ matchedPdvByClient: new Map(), forceExpandClients: new Set() });
+
+  // When user searches, fetch PdV+devices to find matches across hierarchy
+  useEffect(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) {
+      setSearchMatches({ matchedPdvByClient: new Map(), forceExpandClients: new Set() });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const [posRes, assignRes] = await Promise.all([
+        supabase.from("points_of_sale").select("id, client_id, name, address"),
+        supabase
+          .from("device_assignments")
+          .select("point_of_sale_id, devices(fixno, customer_name, branch_name)")
+          .is("unassigned_at", null),
+      ]);
+      if (cancelled) return;
+      const pos = posRes.data || [];
+      const assigns = assignRes.data || [];
+
+      const matchedPdv = new Set<string>();
+      pos.forEach((p: any) => {
+        if (
+          p.name?.toLowerCase().includes(q) ||
+          p.address?.toLowerCase().includes(q)
+        ) {
+          matchedPdv.add(p.id);
+        }
+      });
+      assigns.forEach((a: any) => {
+        const d = a.devices;
+        if (
+          d?.fixno?.toLowerCase().includes(q) ||
+          d?.customer_name?.toLowerCase().includes(q) ||
+          d?.branch_name?.toLowerCase().includes(q)
+        ) {
+          matchedPdv.add(a.point_of_sale_id);
+        }
+      });
+
+      const matchedPdvByClient = new Map<string, Set<string>>();
+      const forceExpandClients = new Set<string>();
+      pos.forEach((p: any) => {
+        if (matchedPdv.has(p.id)) {
+          if (!matchedPdvByClient.has(p.client_id)) matchedPdvByClient.set(p.client_id, new Set());
+          matchedPdvByClient.get(p.client_id)!.add(p.id);
+          forceExpandClients.add(p.client_id);
+        }
+      });
+
+      // Also expand clients whose own name/code/contact matches
+      clients.forEach((c) => {
+        if (
+          c.name?.toLowerCase().includes(q) ||
+          c.code?.toLowerCase().includes(q) ||
+          c.contact_name?.toLowerCase().includes(q) ||
+          c.contact_email?.toLowerCase().includes(q)
+        ) {
+          forceExpandClients.add(c.id);
+        }
+      });
+
+      setSearchMatches({ matchedPdvByClient, forceExpandClients });
+    })();
+    return () => { cancelled = true; };
+  }, [searchQuery, clients]);
+
+  const filteredClients = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return clients;
+    return clients.filter((c) => {
+      const directHit =
+        c.name?.toLowerCase().includes(q) ||
+        c.code?.toLowerCase().includes(q) ||
+        c.contact_name?.toLowerCase().includes(q) ||
+        c.contact_email?.toLowerCase().includes(q) ||
+        c.address?.toLowerCase().includes(q);
+      const childHit = searchMatches.forceExpandClients.has(c.id);
+      return directHit || childHit;
+    });
+  }, [clients, searchQuery, searchMatches]);
+
+  const { withDevices, withoutDevices } = useMemo(() => {
+    const counts = assignmentCounts || new Map();
+    const withDevices: any[] = [];
+    const withoutDevices: any[] = [];
+    filteredClients.forEach((c) => {
+      if ((counts.get(c.id) ?? 0) > 0) withDevices.push(c);
+      else withoutDevices.push(c);
+    });
+    return { withDevices, withoutDevices };
+  }, [filteredClients, assignmentCounts]);
+
+  // Handle "Asignar" from UnassignedDevicesSection: open PdV picker
+  const handleAssignFromUnassigned = (deviceId: string) => {
+    setAssignFromUnassigned({ deviceId });
+    setPickPdvOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
       <header className="border-b border-border px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
               <ArrowLeft className="w-5 h-5" />
@@ -626,7 +879,7 @@ export default function ClientsManager() {
               <p className="text-sm text-muted-foreground">Gestiona la estructura Cliente → Punto de Venta → Equipos</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant={isPaused ? "secondary" : "outline"}
               onClick={() => setPauseOpen(true)}
@@ -636,6 +889,7 @@ export default function ClientsManager() {
               {isPaused ? <BellOff className="w-4 h-4 mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
               {isPaused ? "Alertas pausadas" : "Pausa alertas"}
             </Button>
+            <ExportClientsButton />
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-2" /> Importar
             </Button>
@@ -646,8 +900,27 @@ export default function ClientsManager() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+        {/* Global search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar cliente, punto de venta o equipo (fixno, sucursal)..."
+            className="pl-9 h-10"
+          />
+        </div>
+
+        {/* Unassigned devices section */}
+        {tenantId && (
+          <UnassignedDevicesSection
+            searchQuery={searchQuery}
+            onAssign={handleAssignFromUnassigned}
+            defaultExpanded={unassignedDevices.length > 0 && unassignedDevices.length <= 5}
+          />
+        )}
+
         {isLoading ? (
           <p className="text-muted-foreground">Cargando...</p>
         ) : clients.length === 0 ? (
@@ -666,10 +939,31 @@ export default function ClientsManager() {
               </div>
             </CardContent>
           </Card>
+        ) : filteredClients.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic px-2">Sin resultados para “{searchQuery}”</p>
         ) : (
-          clients.map((client) => (
-            <ClientCard key={client.id} client={client} tenantId={tenantId!} />
-          ))
+          <>
+            <ClientGroup
+              title="Con equipos asignados"
+              icon={Users}
+              clients={withDevices}
+              tenantId={tenantId!}
+              defaultOpen={true}
+              searchQuery={searchQuery}
+              matchedPdvByClient={searchMatches.matchedPdvByClient}
+              forceExpandClients={searchMatches.forceExpandClients}
+            />
+            <ClientGroup
+              title="Sin equipos asignados"
+              icon={UserX}
+              clients={withoutDevices}
+              tenantId={tenantId!}
+              defaultOpen={!!searchQuery}
+              searchQuery={searchQuery}
+              matchedPdvByClient={searchMatches.matchedPdvByClient}
+              forceExpandClients={searchMatches.forceExpandClients}
+            />
+          </>
         )}
       </main>
 
@@ -687,6 +981,93 @@ export default function ClientsManager() {
       {pauseOpen && (
         <GlobalAlertsPauseDialog open={pauseOpen} onClose={() => setPauseOpen(false)} />
       )}
+      {pickPdvOpen && tenantId && assignFromUnassigned && (
+        <PickPdvDialog
+          deviceId={assignFromUnassigned.deviceId}
+          tenantId={tenantId}
+          onClose={() => { setPickPdvOpen(false); setAssignFromUnassigned(null); }}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Pick PdV Dialog (for unassigned-section "Asignar" button) ──
+
+function PickPdvDialog({
+  deviceId,
+  tenantId,
+  onClose,
+}: {
+  deviceId: string;
+  tenantId: string;
+  onClose: () => void;
+}) {
+  const { data: clients = [] } = useClients();
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedPdvId, setSelectedPdvId] = useState("");
+  const [showAssign, setShowAssign] = useState(false);
+  const { data: pdvs = [] } = usePointsOfSale(selectedClientId || undefined);
+
+  if (showAssign && selectedPdvId) {
+    return (
+      <AssignDeviceDialog
+        open={true}
+        onClose={onClose}
+        pointOfSaleId={selectedPdvId}
+        tenantId={tenantId}
+        preselectedDeviceId={deviceId}
+      />
+    );
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Elegir Punto de Venta</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Cliente</Label>
+            <select
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={selectedClientId}
+              onChange={(e) => { setSelectedClientId(e.target.value); setSelectedPdvId(""); }}
+            >
+              <option value="">Seleccionar cliente...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedClientId && (
+            <div>
+              <Label>Punto de Venta</Label>
+              {pdvs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic mt-1">Este cliente no tiene PdV. Creá uno primero.</p>
+              ) : (
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={selectedPdvId}
+                  onChange={(e) => setSelectedPdvId(e.target.value)}
+                >
+                  <option value="">Seleccionar PdV...</option>
+                  {pdvs.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => setShowAssign(true)} disabled={!selectedPdvId}>
+            Continuar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

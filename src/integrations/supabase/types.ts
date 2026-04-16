@@ -106,32 +106,38 @@ export type Database = {
       device_assignments: {
         Row: {
           assigned_at: string
+          assignment_reason: string | null
           created_at: string
           device_id: string
           id: string
           point_of_sale_id: string
           tenant_id: string | null
           unassigned_at: string | null
+          unassignment_reason: string | null
           updated_at: string
         }
         Insert: {
           assigned_at?: string
+          assignment_reason?: string | null
           created_at?: string
           device_id: string
           id?: string
           point_of_sale_id: string
           tenant_id?: string | null
           unassigned_at?: string | null
+          unassignment_reason?: string | null
           updated_at?: string
         }
         Update: {
           assigned_at?: string
+          assignment_reason?: string | null
           created_at?: string
           device_id?: string
           id?: string
           point_of_sale_id?: string
           tenant_id?: string | null
           unassigned_at?: string | null
+          unassignment_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -265,6 +271,9 @@ export type Database = {
           alerts_enabled: boolean
           branch_name: string | null
           city: string | null
+          condition: string | null
+          condition_notes: string | null
+          condition_updated_at: string | null
           contact_name: string | null
           contact_phone: string | null
           created_at: string
@@ -290,6 +299,9 @@ export type Database = {
           alerts_enabled?: boolean
           branch_name?: string | null
           city?: string | null
+          condition?: string | null
+          condition_notes?: string | null
+          condition_updated_at?: string | null
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -315,6 +327,9 @@ export type Database = {
           alerts_enabled?: boolean
           branch_name?: string | null
           city?: string | null
+          condition?: string | null
+          condition_notes?: string | null
+          condition_updated_at?: string | null
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
