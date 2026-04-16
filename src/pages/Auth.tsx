@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Eye, EyeOff, ShieldAlert } from "lucide-react";
 
-const CONTACT_EMAIL = "santiago.federico@bitec.cl";
+const CONTACT_EMAIL = "cutmonitor@bitec.cl";
 
 async function checkEmailAllowed(email: string, markUsed = false): Promise<{ allowed: boolean; error?: string }> {
   try {
