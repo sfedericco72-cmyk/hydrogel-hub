@@ -224,7 +224,7 @@ export function ExportClientsButton() {
             "Cortes totales",
             "Cortes restantes",
             "Última conexión",
-            "Nombre origen (CutABC)",
+            "Nombre equipo (CutABC)",
             "Dirección origen",
             "Ciudad origen",
           ],
