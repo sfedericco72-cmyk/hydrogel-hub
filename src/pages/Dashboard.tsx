@@ -4,7 +4,7 @@ import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activit
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
-import { useAssignedHierarchy, flatDevicesFromHierarchy, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
+import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
 import { useDefaultTenant } from "@/hooks/useClients";
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
