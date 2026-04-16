@@ -11,6 +11,8 @@ import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 function formatDateTime(dateStr: string | null) {
   if (!dateStr) return "—";
@@ -56,7 +58,8 @@ interface ChartPoint {
 
 function aggregateHistory(
   history: { cut_date: string; daily_cuts: number | null }[],
-  resolution: TimeResolution
+  resolution: TimeResolution,
+  startDate?: string | null
 ): ChartPoint[] {
   const now = new Date();
   const threeMonthsAgo = new Date(now);
@@ -65,6 +68,9 @@ function aggregateHistory(
   const map = new Map<string, ChartPoint>();
 
   for (const record of history) {
+    // Filter by assignment start date
+    if (startDate && record.cut_date < startDate) continue;
+
     const recordDate = new Date(record.cut_date + "T00:00:00");
     let key: string;
     let label: string;
@@ -101,8 +107,48 @@ export default function BranchDetail() {
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
   const [resolution, setResolution] = useState<TimeResolution>("monthly");
 
-  const chartData = useMemo(() => aggregateHistory(history, resolution), [history, resolution]);
+  // Get assignment start date for this device
+  const { data: assignmentStartDate } = useQuery({
+    queryKey: ["device-assignment-start", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_assignments")
+        .select("assigned_at")
+        .eq("device_id", id!)
+        .is("unassigned_at", null)
+        .order("assigned_at", { ascending: true })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0]?.assigned_at?.slice(0, 10) ?? null;
+    },
+  });
 
+  // Filter history by assignment date for charts
+  const filteredHistory = useMemo(() => {
+    if (!assignmentStartDate) return history;
+    return history.filter(r => r.cut_date >= assignmentStartDate);
+  }, [history, assignmentStartDate]);
+
+  const chartData = useMemo(() => aggregateHistory(history, resolution, assignmentStartDate), [history, resolution, assignmentStartDate]);
+
+  // Cortes totales = sum of daily_cuts since assignment
+  const totalCutsSinceAssignment = useMemo(() => {
+    return filteredHistory.reduce((sum, r) => sum + (r.daily_cuts ?? 0), 0);
+  }, [filteredHistory]);
+
+  // Filter monthlyCutsMap for traffic lights
+  const filteredMonthlyCuts = useMemo(() => {
+    if (!device?.fixno || !monthlyCutsMap) return undefined;
+    const deviceMap = monthlyCutsMap.get(device.fixno);
+    if (!deviceMap || !assignmentStartDate) return deviceMap;
+    const startMonth = assignmentStartDate.slice(0, 7);
+    const filtered = new Map<string, number>();
+    deviceMap.forEach((cuts, month) => {
+      if (month >= startMonth) filtered.set(month, cuts);
+    });
+    return filtered;
+  }, [device?.fixno, monthlyCutsMap, assignmentStartDate]);
   const resolutionLabels: Record<TimeResolution, string> = {
     weekly: "Semanal (últ. 3 meses)",
     monthly: "Mensual",
@@ -176,7 +222,7 @@ export default function BranchDetail() {
               <Scissors className="h-4 w-4" />
               Ventas
             </div>
-            <CutsTrafficLights monthlyCuts={monthlyCutsMap?.get(device.fixno)} />
+            <CutsTrafficLights monthlyCuts={filteredMonthlyCuts} />
           </div>
 
           {/* Conexión - Semáforo */}
@@ -208,8 +254,10 @@ export default function BranchDetail() {
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-lg border border-border bg-card p-4 text-center">
             <Scissors className="mx-auto h-5 w-5 text-primary" />
-            <p className="mt-2 text-xl font-bold font-mono">{(device.total_cuts ?? 0).toLocaleString("es-AR")}</p>
-            <p className="text-xs text-muted-foreground">Cortes totales</p>
+            <p className="mt-2 text-xl font-bold font-mono">{totalCutsSinceAssignment.toLocaleString("es-AR")}</p>
+            <p className="text-xs text-muted-foreground">
+              Cortes totales{assignmentStartDate ? ` (desde ${new Date(assignmentStartDate + "T00:00:00").toLocaleDateString("es-CL")})` : ""}
+            </p>
           </div>
           <div className="rounded-lg border border-border bg-card p-4 text-center">
             <Package className="mx-auto h-5 w-5 text-muted-foreground" />
