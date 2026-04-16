@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.check-alerts]
 verify_jwt = false
+
+[functions.check-email-allowed]
+verify_jwt = false

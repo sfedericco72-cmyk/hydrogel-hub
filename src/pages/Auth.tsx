@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ShieldAlert } from "lucide-react";
+
+const CONTACT_EMAIL = "santiago.federico@bitec.cl";
+
+async function checkEmailAllowed(email: string, markUsed = false): Promise<{ allowed: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("check-email-allowed", {
+      body: { email, markUsed },
+    });
+    if (error) {
+      console.error("check-email-allowed invoke error:", error);
+      return { allowed: false, error: "lookup_failed" };
+    }
+    return data as { allowed: boolean; error?: string };
+  } catch (err) {
+    console.error("check-email-allowed exception:", err);
+    return { allowed: false, error: "lookup_failed" };
+  }
+}
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,7 +35,25 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Show "denied" message when redirected from a blocked OAuth login
+  useEffect(() => {
+    if (searchParams.get("denied") === "1") {
+      toast({
+        title: "Acceso no autorizado",
+        description: `Tu email no está habilitado para registrarse. Solicitá acceso escribiendo a ${CONTACT_EMAIL}.`,
+        variant: "destructive",
+        duration: 10000,
+      });
+      // Clear flag from URL
+      const next = new URLSearchParams(searchParams);
+      next.delete("denied");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +65,19 @@ export default function Auth() {
         if (error) throw error;
         navigate("/");
       } else {
+        // Whitelist check BEFORE creating the account
+        const check = await checkEmailAllowed(email);
+        if (!check.allowed) {
+          toast({
+            title: "Email no autorizado",
+            description: `Tu email no está habilitado para registrarse en CutMonitor. Solicitá acceso escribiendo a ${CONTACT_EMAIL} indicando tu empresa y email.`,
+            variant: "destructive",
+            duration: 10000,
+          });
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -38,6 +87,10 @@ export default function Auth() {
           },
         });
         if (error) throw error;
+
+        // Mark the email as used (best-effort, no need to await UX)
+        checkEmailAllowed(email, true).catch(() => {});
+
         toast({
           title: "¡Cuenta creada!",
           description: `Te enviamos un email a ${email} para confirmar tu cuenta. Una vez confirmado, podrás iniciar sesión y configurar tu empresa.`,
@@ -113,6 +166,20 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!isLogin && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-muted-foreground flex gap-2">
+              <ShieldAlert className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p>
+                CutMonitor está en <span className="font-medium text-foreground">beta</span> y el acceso es por invitación.
+                Si tu email no fue autorizado, escribí a{" "}
+                <a href={`mailto:${CONTACT_EMAIL}?subject=Solicitud%20de%20acceso%20a%20CutMonitor`} className="text-primary hover:underline">
+                  {CONTACT_EMAIL}
+                </a>{" "}
+                indicando empresa y email.
+              </p>
+            </div>
+          )}
+
           <Button
             variant="outline"
             className="w-full"

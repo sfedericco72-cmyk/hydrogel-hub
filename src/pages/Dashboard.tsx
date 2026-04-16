@@ -1,6 +1,7 @@
 import { MonthlyTimeline } from "@/components/MonthlyTimeline";
 import { DeviceCard } from "@/components/DeviceCard";
-import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, TrendingUp, Settings, MapPin, AlertTriangle, LogOut } from "lucide-react";
+import WelcomeBanner from "@/components/WelcomeBanner";
+import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, TrendingUp, Settings, MapPin, AlertTriangle, LogOut, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
   const [syncing, setSyncing] = useState(false);
   const [clientsExpanded, setClientsExpanded] = useState(true);
+  const [welcomeForceOpen, setWelcomeForceOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -165,7 +167,16 @@ export default function Dashboard() {
           onSync={handleSync}
           clientFilter={clientFilter}
           navigate={navigate}
+          onShowWelcome={() => setWelcomeForceOpen(true)}
         />
+
+        {/* Welcome banner (beta + acceso por invitación) */}
+        <div className="mb-6">
+          <WelcomeBanner
+            forceOpen={welcomeForceOpen}
+            onDismiss={() => setWelcomeForceOpen(false)}
+          />
+        </div>
 
         {isEmpty ? (
           <EmptyState navigate={navigate} />
@@ -291,17 +302,28 @@ export default function Dashboard() {
 
 /* ─── Sub-components ─────────────────────────────────── */
 
-function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate }: {
+function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate, onShowWelcome }: {
   lastSyncDate: string | null;
   syncing: boolean;
   onSync: () => void;
   clientFilter: string;
   navigate: ReturnType<typeof useNavigate>;
+  onShowWelcome: () => void;
 }) {
   return (
     <div className="mb-8 flex items-start justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Panel de Control</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Panel de Control</h1>
+          <button
+            onClick={onShowWelcome}
+            className="text-muted-foreground hover:text-primary transition-colors"
+            aria-label="Mostrar bienvenida"
+            title="Acerca de CutMonitor"
+          >
+            <Info className="h-4 w-4" />
+          </button>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">Seguimiento de máquinas de corte de hidrogel</p>
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="h-3.5 w-3.5" />
