@@ -179,22 +179,54 @@ export default function Dashboard() {
             {/* Filters */}
             <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex flex-col gap-1">
-                <div className="flex flex-wrap gap-2">
-                  <FilterBtn active={stateFilter === "all"} onClick={() => setStateFilter("all")}>
-                    Todos ({scopedDevices.length})
-                  </FilterBtn>
-                  <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
-                    <Activity className="mr-1 inline h-3.5 w-3.5" />
-                    Activos ({stateCounts.active})
-                  </FilterBtn>
-                  <FilterBtn active={stateFilter === "disconnected"} onClick={() => toggleStateFilter("disconnected")} warning>
-                    <WifiOff className="mr-1 inline h-3.5 w-3.5" />
-                    Desconectados ({stateCounts.disconnected})
-                  </FilterBtn>
-                  <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} warning>
-                    Inactivos ({stateCounts.inactive})
-                  </FilterBtn>
-                </div>
+                <TooltipProvider delayDuration={200}>
+                  <div className="flex flex-wrap gap-2">
+                    <FilterBtn active={stateFilter === "all"} onClick={() => setStateFilter("all")}>
+                      Todos ({scopedDevices.length})
+                    </FilterBtn>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <FilterBtn active={stateFilter === "active"} onClick={() => toggleStateFilter("active")}>
+                            <Activity className="mr-1 inline h-3.5 w-3.5" />
+                            Activos ({stateCounts.active})
+                          </FilterBtn>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs text-xs">Equipos con al menos 1 corte en los últimos 3 meses (producción).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <FilterBtn active={stateFilter === "disconnected"} onClick={() => toggleStateFilter("disconnected")} warning>
+                            <WifiOff className="mr-1 inline h-3.5 w-3.5" />
+                            Desconectados ({stateCounts.disconnected})
+                          </FilterBtn>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs text-xs">Equipos sin señal a internet hace más de 7 días (conexión, no producción).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} warning>
+                            Inactivos ({stateCounts.inactive})
+                          </FilterBtn>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs text-xs">Equipos sin cortes en los últimos 3 meses.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
+                <p className="px-1 text-[10px] text-muted-foreground opacity-70">
+                  Activo/Inactivo mide producción · Desconectado mide conexión a internet — son dimensiones independientes.
+                </p>
 
                 {/* Client tree */}
                 <ClientTree
