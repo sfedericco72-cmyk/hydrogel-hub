@@ -641,19 +641,19 @@ export default function ClientsManager() {
           </Card>
         ) : (
           clients.map((client) => (
-            <ClientCard key={client.id} client={client} tenantId={tenant!.id} />
+            <ClientCard key={client.id} client={client} tenantId={tenantId!} />
           ))
         )}
       </main>
 
-      {createOpen && tenant && (
-        <ClientDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenant.id} />
+      {createOpen && tenantId && (
+        <ClientDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} />
       )}
-      {importOpen && tenant && (
+      {importOpen && tenantId && (
         <ImportClientsDialog
           open={importOpen}
           onClose={() => setImportOpen(false)}
-          tenantId={tenant.id}
+          tenantId={tenantId}
           existingNames={clients.map((c) => c.name)}
         />
       )}
