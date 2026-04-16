@@ -58,7 +58,8 @@ interface ChartPoint {
 
 function aggregateHistory(
   history: { cut_date: string; daily_cuts: number | null }[],
-  resolution: TimeResolution
+  resolution: TimeResolution,
+  startDate?: string | null
 ): ChartPoint[] {
   const now = new Date();
   const threeMonthsAgo = new Date(now);
@@ -67,6 +68,9 @@ function aggregateHistory(
   const map = new Map<string, ChartPoint>();
 
   for (const record of history) {
+    // Filter by assignment start date
+    if (startDate && record.cut_date < startDate) continue;
+
     const recordDate = new Date(record.cut_date + "T00:00:00");
     let key: string;
     let label: string;
