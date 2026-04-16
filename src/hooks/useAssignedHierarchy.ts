@@ -29,10 +29,9 @@ export interface HierarchyClient {
  * Only includes devices with active assignments (unassigned_at IS NULL).
  * Returns an empty array if there are no assignments.
  */
-export function useAssignedHierarchy(tenantId?: string) {
+export function useAssignedHierarchy() {
   return useQuery({
-    queryKey: ["assigned-hierarchy", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["assigned-hierarchy"],
     queryFn: async () => {
       // 1. Fetch all active assignments with device + PdV + client info
       const { data: assignments, error: aErr } = await supabase
@@ -64,8 +63,7 @@ export function useAssignedHierarchy(tenantId?: string) {
 
         if (!pos || !client || !device) continue;
 
-        // Filter by tenant if provided
-        if (tenantId && device.tenant_id !== tenantId) continue;
+        // RLS handles tenant filtering
 
         if (!clientMap.has(client.id)) {
           clientMap.set(client.id, {
