@@ -3,7 +3,7 @@ import { DeviceCard } from "@/components/DeviceCard";
 import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, Mail, TrendingUp, Settings, MapPin, AlertTriangle } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
 import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
 import { useDefaultTenant } from "@/hooks/useClients";
 import { titleCase } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type ClientFilter = "all" | string;
-type StateFilter = "all" | DeviceState;
+type StateFilter = "all" | "active" | "inactive" | "disconnected";
 
 function formatSyncDate(dateStr: string | null) {
   if (!dateStr) return "Nunca";
@@ -103,8 +103,11 @@ export default function Dashboard() {
   const scopedDevices = useMemo(() => flatDevicesFromHierarchy(scopedHierarchy), [scopedHierarchy]);
 
   const stateCounts = useMemo(() => {
-    const counts: Record<DeviceState, number> = { stock: 0, active: 0, inactive: 0, disconnected: 0 };
-    scopedDevices.forEach(d => { counts[getDeviceState(d, lastCutDates)]++; });
+    const counts = { active: 0, inactive: 0, disconnected: 0 };
+    scopedDevices.forEach(d => {
+      counts[getActivityState(d, lastCutDates)]++;
+      if (isDeviceDisconnected(d)) counts.disconnected++;
+    });
     return counts;
   }, [scopedDevices, lastCutDates]);
 
@@ -114,7 +117,9 @@ export default function Dashboard() {
       const filteredPOS = client.pointsOfSale.map(pos => {
         const filteredDevices = pos.devices.filter(ad => {
           const d = ad.device;
-          if (stateFilter !== "all" && getDeviceState(d, lastCutDates) !== stateFilter) return false;
+          if (stateFilter === "disconnected" && !isDeviceDisconnected(d)) return false;
+          if (stateFilter === "active" && getActivityState(d, lastCutDates) !== "active") return false;
+          if (stateFilter === "inactive" && getActivityState(d, lastCutDates) !== "inactive") return false;
           const q = search.toLowerCase();
           if (q && !(
             (d.branch_name ?? "").toLowerCase().includes(q) ||
@@ -144,7 +149,7 @@ export default function Dashboard() {
     }
   }
 
-  function toggleStateFilter(state: DeviceState) {
+  function toggleStateFilter(state: StateFilter) {
     setStateFilter(prev => prev === state ? "all" : state);
   }
 
@@ -188,10 +193,6 @@ export default function Dashboard() {
                   </FilterBtn>
                   <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} warning>
                     Inactivos ({stateCounts.inactive})
-                  </FilterBtn>
-                  <FilterBtn active={stateFilter === "stock"} onClick={() => toggleStateFilter("stock")}>
-                    <Package className="mr-1 inline h-3.5 w-3.5" />
-                    En stock ({stateCounts.stock})
                   </FilterBtn>
                 </div>
 

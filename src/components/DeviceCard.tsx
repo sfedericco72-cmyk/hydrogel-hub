@@ -1,16 +1,9 @@
-import { Device, getDeviceState, getDaysOfStock, hasLowStock, DEVICE_STATE_LABELS, type DeviceState, useMonthlyCutsMap, getConnectionLevel } from "@/hooks/useDevices";
+import { Device, getActivityState, isDeviceDisconnected, getDisconnectionDays, getDaysOfStock, hasLowStock, ACTIVITY_LABELS, type ActivityState, getConnectionLevel } from "@/hooks/useDevices";
 import { titleCase } from "@/lib/utils";
 import { CutsTrafficLights, ConnectionTrafficLight } from "./TrafficLights";
 import { Scissors, ChevronRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { StatusBadge } from "./StatusBadge";
-
-const stateStatusMap: Record<DeviceState, "online" | "offline" | "warning"> = {
-  stock: "warning",
-  active: "online",
-  inactive: "warning",
-  disconnected: "offline",
-};
 
 export function DeviceCard({ device, lastCutDates, avgDailyCuts, monthlyCutsMap }: {
   device: Device;
@@ -19,7 +12,9 @@ export function DeviceCard({ device, lastCutDates, avgDailyCuts, monthlyCutsMap 
   monthlyCutsMap?: Map<string, Map<string, number>>;
 }) {
   const navigate = useNavigate();
-  const deviceState = getDeviceState(device, lastCutDates);
+  const activity = getActivityState(device, lastCutDates);
+  const disconnected = isDeviceDisconnected(device);
+  const disconnDays = getDisconnectionDays(device);
   const lowStock = hasLowStock(device, avgDailyCuts);
   const daysOfStock = getDaysOfStock(device, avgDailyCuts);
   const deviceMonthlyCuts = monthlyCutsMap?.get(device.fixno);
@@ -47,10 +42,16 @@ export function DeviceCard({ device, lastCutDates, avgDailyCuts, monthlyCutsMap 
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
         <StatusBadge
-          status={stateStatusMap[deviceState]}
-          label={DEVICE_STATE_LABELS[deviceState]}
-          pulse={deviceState === "active"}
+          status={activity === "active" ? "online" : "warning"}
+          label={ACTIVITY_LABELS[activity]}
+          pulse={activity === "active"}
         />
+        {disconnected && (
+          <StatusBadge
+            status="offline"
+            label={`Desconectado${disconnDays !== null ? ` ${disconnDays}d` : ""}`}
+          />
+        )}
         {daysOfStock !== null && (
           <StatusBadge
             status={lowStock ? "warning" : "online"}

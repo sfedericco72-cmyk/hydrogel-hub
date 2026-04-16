@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useDevices, useLastCutDates, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { useDevices, useLastCutDates, getActivityState, isDeviceDisconnected } from "@/hooks/useDevices";
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Mail, Save, Check, Activity, WifiOff, Users, ChevronDown, ChevronRight, History } from "lucide-react";
@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@tanstack/react-query";
 
 type ClientFilter = "all" | string;
-type StateFilter = "all" | DeviceState;
+type StateFilter = "all" | "active" | "inactive" | "disconnected";
 
 export default function DeviceEmails() {
   const navigate = useNavigate();
@@ -34,12 +34,16 @@ export default function DeviceEmails() {
 
   const filtered = useMemo(() => {
     if (stateFilter === "all") return scopedDevices;
-    return scopedDevices.filter((d) => getDeviceState(d, lastCutDates) === stateFilter);
+    if (stateFilter === "disconnected") return scopedDevices.filter((d) => isDeviceDisconnected(d));
+    return scopedDevices.filter((d) => getActivityState(d, lastCutDates) === stateFilter);
   }, [scopedDevices, stateFilter, lastCutDates]);
 
   const stateCounts = useMemo(() => {
-    const counts: Record<DeviceState, number> = { stock: 0, active: 0, inactive: 0, disconnected: 0 };
-    scopedDevices.forEach((d) => { counts[getDeviceState(d, lastCutDates)]++; });
+    const counts = { active: 0, inactive: 0, disconnected: 0 };
+    scopedDevices.forEach((d) => {
+      counts[getActivityState(d, lastCutDates)]++;
+      if (isDeviceDisconnected(d)) counts.disconnected++;
+    });
     return counts;
   }, [scopedDevices, lastCutDates]);
 
@@ -152,6 +156,9 @@ export default function DeviceEmails() {
             <FilterBtn active={stateFilter === "disconnected"} onClick={() => toggleStateFilter("disconnected")} warning>
               <WifiOff className="mr-1 inline h-3.5 w-3.5" />
               Desconectados ({stateCounts.disconnected})
+            </FilterBtn>
+            <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} warning>
+              Inactivos ({stateCounts.inactive})
             </FilterBtn>
           </div>
 
