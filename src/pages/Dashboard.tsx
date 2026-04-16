@@ -149,7 +149,7 @@ export default function Dashboard() {
     }
   }
 
-  function toggleStateFilter(state: DeviceState) {
+  function toggleStateFilter(state: StateFilter) {
     setStateFilter(prev => prev === state ? "all" : state);
   }
 

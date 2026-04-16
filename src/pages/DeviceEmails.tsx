@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useDevices, useLastCutDates, getDeviceState, type DeviceState } from "@/hooks/useDevices";
+import { useDevices, useLastCutDates, getActivityState, isDeviceDisconnected } from "@/hooks/useDevices";
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Mail, Save, Check, Activity, WifiOff, Users, ChevronDown, ChevronRight, History } from "lucide-react";
