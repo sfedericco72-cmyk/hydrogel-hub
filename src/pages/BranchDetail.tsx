@@ -5,7 +5,7 @@ import {
   ArrowLeft, Scissors,
   Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw
 } from "lucide-react";
-import { useDevice, useLastCutDates, useMonthlyCutsMap, getDeviceState, DEVICE_STATE_LABELS } from "@/hooks/useDevices";
+import { useDevice, useLastCutDates, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, getDisconnectionDays, ACTIVITY_LABELS } from "@/hooks/useDevices";
 import { useCutsHistory } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { titleCase } from "@/lib/utils";
