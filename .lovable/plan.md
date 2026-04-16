@@ -1,66 +1,41 @@
 
 
-## Plan: Autenticación Admin + Migración tenant "default" → "BITEC"
+## Plan: Completar flujo de onboarding para usuarios nuevos + opción de testeo
 
-### Alcance reducido
-- Solo admin (sin roles de usuario normal por ahora)
-- Migrar el tenant actual de "default" a "BITEC" sin perder datos
-- Auth con email+contraseña + Google
-- Securizar RLS (requiere login)
-- Onboarding wizard para nuevos tenants (credenciales CutABC)
+### Problema actual
+Cuando un usuario nuevo se registra, su `profiles.tenant_id` es `null`. El onboarding intenta actualizar `tenant_settings` con ese tenant_id null → falla. Falta crear el tenant automáticamente.
 
-### Paso 1: Migraciones de base de datos
+### Cambios
 
-**1a. Crear tabla `profiles`**
-- Columnas: `id` (FK → auth.users), `full_name`, `avatar_url`, `tenant_id` (FK → tenants)
-- Trigger auto-create on signup
-- RLS: usuario solo ve su perfil
+**1. Modificar `Onboarding.tsx` — handleFinish()**
+- Si `profile.tenant_id` es null:
+  - Crear un nuevo registro en `tenants` (name = company_name, slug = generado)
+  - Crear un nuevo registro en `tenant_settings` con las credenciales CutABC
+  - Actualizar `profiles.tenant_id` con el nuevo tenant
+  - Asignar rol `admin` al usuario en `user_roles`
+- Si ya tiene tenant_id (caso existente): actualizar como está ahora
 
-**1b. Crear tabla `user_roles`**
-- Enum `app_role` (solo `admin` por ahora)
-- Función `has_role()` SECURITY DEFINER
-- El primer usuario registrado se asigna admin manualmente
+**2. Ajustar RLS para permitir estas operaciones**
+- `tenants` INSERT: actualmente solo admins. Un usuario nuevo no tiene rol todavía → necesita policy para INSERT si no tiene tenant asignado
+- `tenant_settings` INSERT: mismo caso
+- `profiles` UPDATE: ya existe policy para `auth.uid() = id` ✓
+- `user_roles` INSERT: actualmente bloqueado para todos → necesita policy o usar una database function SECURITY DEFINER que haga todo el setup
 
-**1c. Agregar credenciales CutABC a `tenant_settings`**
-- Columnas: `cutabc_company_no`, `cutabc_username`, `cutabc_password`
-- Para BITEC, migrar los valores actuales de los secrets a la tabla
+**3. Crear función `setup_new_tenant` SECURITY DEFINER**
+Más limpio y seguro: una sola función de DB que:
+- Crea el tenant
+- Crea tenant_settings con credenciales
+- Actualiza profiles.tenant_id
+- Asigna rol admin
+- Todo en una transacción
 
-**1d. Migrar tenant "default" → "BITEC"**
-- `UPDATE tenants SET name = 'Bitec', slug = 'bitec' WHERE ...`
-- `UPDATE tenant_settings SET tenant_name = 'bitec', company_name = 'Bitec' WHERE tenant_name = 'default'`
-- Asegurar que todos los devices/clients existentes apuntan al tenant_id correcto
+El onboarding solo llama a esta función vía `supabase.rpc('setup_new_tenant', {...})`.
 
-**1e. Securizar RLS en todas las tablas**
-- Reemplazar `true` por `auth.uid() IS NOT NULL` en: `clients`, `points_of_sale`, `device_assignments`, `devices`, `equipment_sales`, `tenant_settings`, `tenants`, `cuts_history_backfill`
-- `tenant_settings` UPDATE solo para admins
-- Tablas de email y service_role quedan igual
-
-### Paso 2: Página de autenticación
-- Crear `/auth` con login (email+contraseña) y Google
-- Componente `ProtectedRoute` que redirige a `/auth` si no hay sesión
-- Proteger todas las rutas excepto `/auth` y `/unsubscribe`
-- Botón de logout en el header
-- Página `/reset-password`
-
-### Paso 3: Onboarding wizard (nuevos tenants)
-- Después del primer login, si el tenant no tiene credenciales CutABC → wizard
-- 3 pasos: Empresa → Credenciales CutABC (con instrucciones de usuario solo lectura) → Validar conexión
-- Edge function `validate-cutabc-credentials` para probar login en tiempo real
-- Al completar, guardar en `tenant_settings` y disparar primera sync
-
-### Paso 4: Adaptar sync a multi-tenant
-- `sync-cutabc` lee credenciales de `tenant_settings` por tenant (ya no de secrets globales)
-- Itera por cada tenant activo
-- `check-alerts` igual: lee por tenant
-- Los secrets globales CUTABC_* quedan como fallback temporal
-
-### Paso 5: Restricciones admin
-- `/setup` solo accesible si `has_role(uid, 'admin')`
-- Redirect si no es admin
-
-### Datos existentes
-Ningún dato se pierde. La migración solo renombra el tenant y vincula los registros existentes al tenant_id de BITEC.
+**4. Para testear**
+- Registrarte con otro email (ej: `tu+test@gmail.com`)
+- Al entrar, te redirige al wizard de onboarding
+- Completás los 3 pasos y queda configurado
 
 ### Estimación
-~12-16 mensajes de implementación.
+~2 mensajes: 1 migración (función DB) + 1 actualización del onboarding.
 
