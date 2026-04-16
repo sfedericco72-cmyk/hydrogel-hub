@@ -121,3 +121,21 @@ export function flatDevicesFromHierarchy(hierarchy: HierarchyClient[]): Device[]
     c.pointsOfSale.flatMap((p) => p.devices.map((d) => d.device))
   );
 }
+
+/** Map of fixno → assignment start date (YYYY-MM-DD) */
+export function assignmentStartDates(hierarchy: HierarchyClient[]): Map<string, string> {
+  const map = new Map<string, string>();
+  hierarchy.forEach((c) =>
+    c.pointsOfSale.forEach((p) =>
+      p.devices.forEach((ad) => {
+        const startDate = ad.assignedAt.slice(0, 10);
+        const existing = map.get(ad.device.fixno);
+        // Keep the earliest assignment date if somehow duplicated
+        if (!existing || startDate < existing) {
+          map.set(ad.device.fixno, startDate);
+        }
+      })
+    )
+  );
+  return map;
+}
