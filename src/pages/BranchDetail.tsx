@@ -195,24 +195,28 @@ export default function BranchDetail() {
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {/* Estado */}
           {(() => {
-            const deviceState = device ? getDeviceState(device, lastCutDates) : "stock";
-            const stateStatusMap: Record<string, "online" | "offline" | "warning"> = {
-              active: "online",
-              inactive: "warning",
-              disconnected: "offline",
-              stock: "offline",
-            };
+            const activity = device ? getActivityState(device, lastCutDates) : "inactive";
+            const disconnected = device ? isDeviceDisconnected(device) : false;
+            const disconnDays = device ? getDisconnectionDays(device) : null;
             return (
               <div className="rounded-lg border border-border bg-card p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
                   <HardDrive className="h-4 w-4" />
                   Estado
                 </div>
-                <StatusBadge
-                  status={stateStatusMap[deviceState]}
-                  label={DEVICE_STATE_LABELS[deviceState]}
-                  pulse={deviceState === "active"}
-                />
+                <div className="flex flex-wrap gap-1.5">
+                  <StatusBadge
+                    status={activity === "active" ? "online" : "warning"}
+                    label={ACTIVITY_LABELS[activity]}
+                    pulse={activity === "active"}
+                  />
+                  {disconnected && (
+                    <StatusBadge
+                      status="offline"
+                      label={`Desconectado${disconnDays !== null ? ` ${disconnDays}d` : ""}`}
+                    />
+                  )}
+                </div>
               </div>
             );
           })()}
