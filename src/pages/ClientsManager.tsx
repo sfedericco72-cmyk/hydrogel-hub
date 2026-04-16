@@ -175,7 +175,7 @@ function PdVDialog({
 }) {
   const [name, setName] = useState(editPdV?.name || "");
   const [address, setAddress] = useState(editPdV?.address || "");
-  const [city, setCity] = useState(editPdV?.city || "");
+  
   const create = useCreatePointOfSale();
   const update = useUpdatePointOfSale();
   const isEdit = !!editPdV;
@@ -188,10 +188,10 @@ function PdVDialog({
     }
     try {
       if (isEdit) {
-        await update.mutateAsync({ id: editPdV.id, name: trimmed, address: address.trim() || null, city: city.trim() || null });
+        await update.mutateAsync({ id: editPdV.id, name: trimmed, address: address.trim() || null });
         toast.success("Punto de venta actualizado");
       } else {
-        await create.mutateAsync({ client_id: clientId, name: trimmed, address: address.trim() || null, city: city.trim() || null });
+        await create.mutateAsync({ client_id: clientId, name: trimmed, address: address.trim() || null });
         toast.success("Punto de venta creado");
       }
       onClose();
@@ -220,10 +220,6 @@ function PdVDialog({
                 setAddress(result.address);
               }}
             />
-          </div>
-          <div>
-            <Label>Ciudad</Label>
-            <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ciudad" maxLength={100} />
           </div>
         </div>
         <DialogFooter>
