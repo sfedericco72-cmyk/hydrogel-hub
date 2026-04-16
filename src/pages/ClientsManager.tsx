@@ -193,7 +193,7 @@ function PdVDialog({
         await update.mutateAsync({ id: editPdV.id, name: trimmed, address: address.trim() || null });
         toast.success("Punto de venta actualizado");
       } else {
-        await create.mutateAsync({ client_id: clientId, name: trimmed, address: address.trim() || null });
+        await create.mutateAsync({ client_id: clientId, tenant_id: tenantId, name: trimmed, address: address.trim() || null });
         toast.success("Punto de venta creado");
       }
       onClose();
@@ -271,7 +271,7 @@ function AssignDeviceDialog({
     }
     try {
       const assignedAt = new Date(assignDate + "T00:00:00").toISOString();
-      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, assigned_at: assignedAt });
+      await assign.mutateAsync({ device_id: selectedDeviceId, point_of_sale_id: pointOfSaleId, tenant_id: tenantId, assigned_at: assignedAt });
       toast.success("Equipo asignado");
       setSelectedDeviceId("");
       setSearch("");
@@ -572,6 +572,7 @@ function ClientCard({ client, tenantId }: { client: any; tenantId: string }) {
               open={pdvDialogOpen}
               onClose={() => { setPdvDialogOpen(false); setEditPdV(null); }}
               clientId={client.id}
+              tenantId={tenantId}
               editPdV={editPdV}
             />
           )}
