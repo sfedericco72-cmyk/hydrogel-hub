@@ -1,41 +1,26 @@
 
 
-## Plan: Completar flujo de onboarding para usuarios nuevos + opción de testeo
+## Plan: Arreglar el onboarding que queda colgado después de guardar
 
-### Problema actual
-Cuando un usuario nuevo se registra, su `profiles.tenant_id` es `null`. El onboarding intenta actualizar `tenant_settings` con ese tenant_id null → falla. Falta crear el tenant automáticamente.
+### Problema raíz
+Después de que `setup_new_tenant` se ejecuta correctamente y `navigate("/")` redirige a la ruta principal, `ProtectedRoute` vuelve a evaluar `needsOnboarding`. Pero el `useEffect` que hace esa verificación solo se dispara cuando cambia `session` — que no cambia. Entonces `needsOnboarding` sigue siendo `true` del check anterior, y redirige de vuelta a `/onboarding`. El usuario ve la pantalla quieta.
 
-### Cambios
+### Solución
 
-**1. Modificar `Onboarding.tsx` — handleFinish()**
-- Si `profile.tenant_id` es null:
-  - Crear un nuevo registro en `tenants` (name = company_name, slug = generado)
-  - Crear un nuevo registro en `tenant_settings` con las credenciales CutABC
-  - Actualizar `profiles.tenant_id` con el nuevo tenant
-  - Asignar rol `admin` al usuario en `user_roles`
-- Si ya tiene tenant_id (caso existente): actualizar como está ahora
+**1. ProtectedRoute — invalidar el check después del onboarding**
+- Cambiar el trigger del `useEffect` de onboarding para que también responda a cambios de `location.pathname`. Así cuando navega de `/onboarding` a `/`, se re-ejecuta el check y esta vez encuentra `tenant_id` con credenciales.
 
-**2. Ajustar RLS para permitir estas operaciones**
-- `tenants` INSERT: actualmente solo admins. Un usuario nuevo no tiene rol todavía → necesita policy para INSERT si no tiene tenant asignado
-- `tenant_settings` INSERT: mismo caso
-- `profiles` UPDATE: ya existe policy para `auth.uid() = id` ✓
-- `user_roles` INSERT: actualmente bloqueado para todos → necesita policy o usar una database function SECURITY DEFINER que haga todo el setup
+**2. Onboarding.tsx — forzar re-check antes de navegar**
+- Después de `setup_new_tenant`, esperar un breve momento y luego navegar. Opcionalmente invalidar React Query caches si los hay.
 
-**3. Crear función `setup_new_tenant` SECURITY DEFINER**
-Más limpio y seguro: una sola función de DB que:
-- Crea el tenant
-- Crea tenant_settings con credenciales
-- Actualiza profiles.tenant_id
-- Asigna rol admin
-- Todo en una transacción
+### Cambios concretos
 
-El onboarding solo llama a esta función vía `supabase.rpc('setup_new_tenant', {...})`.
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/ProtectedRoute.tsx` | Agregar `location.pathname` al array de dependencias del `useEffect` de onboarding. Resetear `needsOnboarding` a `undefined` antes de cada check para que muestre spinner mientras verifica. |
+| `src/pages/Onboarding.tsx` | Después de `setup_new_tenant`, hacer un pequeño delay o re-fetch del profile antes de navegar, para asegurar que el dato está disponible. |
 
-**4. Para testear**
-- Registrarte con otro email (ej: `tu+test@gmail.com`)
-- Al entrar, te redirige al wizard de onboarding
-- Completás los 3 pasos y queda configurado
-
-### Estimación
-~2 mensajes: 1 migración (función DB) + 1 actualización del onboarding.
+### Notas
+- `sync-cutabc` sigue usando secrets globales — funciona para BITEC pero no para nuevos tenants. Eso se resuelve en el paso de "sync multi-tenant" que queda pendiente.
+- No se pierden datos ni se tocan migraciones.
 
