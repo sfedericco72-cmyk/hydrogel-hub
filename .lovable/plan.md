@@ -1,26 +1,55 @@
 
+## Problema detectado
 
-## Plan: Arreglar el onboarding que queda colgado después de guardar
+Sí, ya sé cuál es el problema.
 
-### Problema raíz
-Después de que `setup_new_tenant` se ejecuta correctamente y `navigate("/")` redirige a la ruta principal, `ProtectedRoute` vuelve a evaluar `needsOnboarding`. Pero el `useEffect` que hace esa verificación solo se dispara cuando cambia `session` — que no cambia. Entonces `needsOnboarding` sigue siendo `true` del check anterior, y redirige de vuelta a `/onboarding`. El usuario ve la pantalla quieta.
+El onboarding sí se está guardando en el backend. Lo confirmé porque tu usuario ya tiene:
+- `profiles.tenant_id` con valor
+- `tenant_settings` con las credenciales CutABC cargadas
 
-### Solución
+O sea: la creación del tenant funciona. El bug está en la navegación.
 
-**1. ProtectedRoute — invalidar el check después del onboarding**
-- Cambiar el trigger del `useEffect` de onboarding para que también responda a cambios de `location.pathname`. Así cuando navega de `/onboarding` a `/`, se re-ejecuta el check y esta vez encuentra `tenant_id` con credenciales.
+La pantalla donde quedás “quieto” encaja con esto:
+- terminás el wizard
+- la app vuelve a `/onboarding`
+- esa ruta no tiene una salida automática cuando el onboarding ya quedó completo
+- entonces te quedás atrapado ahí, incluso con los datos ya guardados
 
-**2. Onboarding.tsx — forzar re-check antes de navegar**
-- Después de `setup_new_tenant`, esperar un breve momento y luego navegar. Opcionalmente invalidar React Query caches si los hay.
+## Plan
 
-### Cambios concretos
+1. **Arreglar el guard de rutas para que sea bidireccional**
+   - Si falta onboarding y estás en una ruta normal: redirigir a `/onboarding`
+   - Si el onboarding ya está completo y seguís en `/onboarding`: redirigir a `/`
 
-| Archivo | Cambio |
-|---------|--------|
-| `src/components/ProtectedRoute.tsx` | Agregar `location.pathname` al array de dependencias del `useEffect` de onboarding. Resetear `needsOnboarding` a `undefined` antes de cada check para que muestre spinner mientras verifica. |
-| `src/pages/Onboarding.tsx` | Después de `setup_new_tenant`, hacer un pequeño delay o re-fetch del profile antes de navegar, para asegurar que el dato está disponible. |
+2. **Separar mejor la lógica de la ruta onboarding**
+   - Ajustar `ProtectedRoute` o crear un wrapper específico para `/onboarding`
+   - Actualizar `App.tsx` para usar esa lógica sin ambigüedades
 
-### Notas
-- `sync-cutabc` sigue usando secrets globales — funciona para BITEC pero no para nuevos tenants. Eso se resuelve en el paso de "sync multi-tenant" que queda pendiente.
-- No se pierden datos ni se tocan migraciones.
+3. **Hacer más robusta la salida del wizard**
+   - En `Onboarding.tsx`, después de guardar, revalidar perfil/configuración del usuario
+   - Recién después navegar al dashboard
+   - Mantener el estado de carga hasta que esa confirmación termine
 
+4. **Endurecer el manejo de errores**
+   - No asumir “todo bien” si falla la lectura del estado de onboarding
+   - Agregar logs temporales en la decisión de redirección para validar el flujo exacto
+
+5. **Validar el flujo completo**
+   - Completar onboarding con el usuario de prueba
+   - Confirmar llegada al dashboard
+   - Refrescar manualmente `/onboarding` y verificar que te saque a `/`
+   - Cerrar sesión y volver a entrar para confirmar que el wizard no reaparece
+
+## Archivos a tocar
+
+- `src/components/ProtectedRoute.tsx`
+- `src/App.tsx`
+- `src/pages/Onboarding.tsx`
+- opcional: `src/components/OnboardingRoute.tsx`
+
+## Detalles técnicos
+
+La evidencia actual apunta a un problema de redirección, no de persistencia:
+- `profiles` ya devuelve `tenant_id`
+- `tenant_settings` ya devuelve `cutabc_company_no`, `cutabc_username` y `cutabc_password`
+- por eso no hace falta rehacer la migración ni el RPC; hay que corregir el flujo de ruta después del guardado
