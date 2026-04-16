@@ -157,6 +157,9 @@ export default function DeviceEmails() {
               <WifiOff className="mr-1 inline h-3.5 w-3.5" />
               Desconectados ({stateCounts.disconnected})
             </FilterBtn>
+            <FilterBtn active={stateFilter === "inactive"} onClick={() => toggleStateFilter("inactive")} warning>
+              Inactivos ({stateCounts.inactive})
+            </FilterBtn>
           </div>
 
           {/* Client tree */}
