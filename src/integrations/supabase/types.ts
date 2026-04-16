@@ -688,6 +688,16 @@ export type Database = {
           read_ct: number
         }[]
       }
+      setup_new_tenant: {
+        Args: {
+          _bcc_email?: string
+          _company_name: string
+          _cutabc_company_no?: string
+          _cutabc_password?: string
+          _cutabc_username?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin"
