@@ -627,6 +627,15 @@ export default function ClientsManager() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant={isPaused ? "secondary" : "outline"}
+              onClick={() => setPauseOpen(true)}
+              className={isPaused ? "border-yellow-600/40 text-yellow-400" : ""}
+              title={isPaused ? `Pausadas hasta ${new Date(settings!.alerts_paused_until!).toLocaleDateString("es-CL")}` : "Pausar alertas globalmente"}
+            >
+              {isPaused ? <BellOff className="w-4 h-4 mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
+              {isPaused ? "Alertas pausadas" : "Pausa alertas"}
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-2" /> Importar
             </Button>
