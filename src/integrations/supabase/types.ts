@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      allowed_emails: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          email: string
+          id: string
+          notes: string | null
+          updated_at: string
+          used_at: string | null
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          used_at?: string | null
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           address: string | null
