@@ -12,7 +12,7 @@ type: feature
 ## Whitelist (invitation-only signup)
 - Table `allowed_emails` (admin-only RLS) holds authorized emails (lowercased via trigger).
 - Edge fn `check-email-allowed` (verify_jwt=false) uses service role to check `{ email }`. Optional `markUsed: true` stamps `used_at`.
-- Auth.tsx: email/password signup calls check BEFORE supabase.auth.signUp. If not allowed → toast pointing to santiago.federico@bitec.cl.
+- Auth.tsx: email/password signup calls check BEFORE supabase.auth.signUp. If not allowed → toast pointing to cutmonitor@bitec.cl (public contact mailbox).
 - ProtectedRoute: on every authenticated session, re-validates email vs whitelist. If not allowed → signOut() + redirect to `/auth?denied=1` (covers Google OAuth where the check can't run pre-signup).
 - Auth.tsx reads `?denied=1` and shows a destructive toast.
 - To add an email: `INSERT INTO allowed_emails (email, notes) VALUES ('user@x.com', 'context');` (admin only).

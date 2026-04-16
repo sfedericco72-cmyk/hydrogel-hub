@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
 const STORAGE_PREFIX = "welcome-banner-dismissed-";
-const CONTACT_EMAIL = "santiago.federico@bitec.cl";
+const CONTACT_EMAIL = "cutmonitor@bitec.cl";
 
 interface WelcomeBannerProps {
   forceOpen?: boolean;
