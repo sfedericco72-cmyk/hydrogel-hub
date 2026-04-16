@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   // Load all tenant settings
   const { data: allSettings, error: tsErr } = await supabase
     .from('tenant_settings')
-    .select('tenant_id, bcc_email, low_stock_days, alert_cooldown_days, alert_max_window_days')
+    .select('tenant_id, bcc_email, low_stock_days, alert_cooldown_days, alert_max_window_days, alerts_paused_until')
     .not('tenant_id', 'is', null)
 
   if (tsErr) {
@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
   }
 
   let totalAlerts = 0
+  const nowMs = Date.now()
 
   for (const settings of (allSettings || [])) {
     const tenantId = settings.tenant_id
@@ -37,9 +38,18 @@ Deno.serve(async (req) => {
     const ALERT_COOLDOWN_DAYS = settings.alert_cooldown_days ?? DEFAULT_COOLDOWN_DAYS
     const ALERT_MAX_WINDOW_DAYS = settings.alert_max_window_days ?? DEFAULT_MAX_WINDOW_DAYS
 
+    // Respect global pause
+    if (settings.alerts_paused_until) {
+      const pausedUntil = new Date(settings.alerts_paused_until).getTime()
+      if (pausedUntil > nowMs) {
+        console.log(`[${tenantId}] Alerts paused until ${settings.alerts_paused_until} — skipping`)
+        continue
+      }
+    }
+
     const { data: devices, error: devErr } = await supabase
       .from('devices')
-      .select('id, fixno, branch_name, customer_name, remaining_cuts, latest_online_time, alert_email, status, alerts_enabled, first_alert_sent_at')
+      .select('id, fixno, branch_name, customer_name, remaining_cuts, latest_online_time, status, first_alert_sent_at')
       .eq('tenant_id', tenantId)
 
     if (devErr || !devices) {
@@ -47,19 +57,42 @@ Deno.serve(async (req) => {
       continue
     }
 
-    const now = Date.now()
+    // Load active assignments for this tenant → map device_id → PdV info
+    const { data: assignments } = await supabase
+      .from('device_assignments')
+      .select('device_id, points_of_sale(id, name, alert_email, alerts_enabled)')
+      .eq('tenant_id', tenantId)
+      .is('unassigned_at', null)
+
+    const pdvByDevice = new Map<string, { id: string; name: string; alert_email: string | null; alerts_enabled: boolean }>()
+    for (const a of (assignments || [])) {
+      const pos = (a as any).points_of_sale
+      if (pos) pdvByDevice.set(a.device_id, pos)
+    }
 
     for (const device of devices) {
       if (!device.branch_name || device.branch_name === device.fixno) continue
-      if (device.alerts_enabled === false) continue
 
-      const hasAlertEmail = !!device.alert_email
+      const pdv = pdvByDevice.get(device.id)
+
+      // No PdV assignment → skip entirely (decision: "No manda alerta al cliente")
+      if (!pdv) {
+        console.log(`[${tenantId}] Device ${device.fixno} has no PdV — skipping alerts`)
+        continue
+      }
+
+      // PdV-level alerts disabled
+      if (pdv.alerts_enabled === false) continue
+
+      const recipientEmail = pdv.alert_email
+      const hasAlertEmail = !!recipientEmail
 
       if (device.first_alert_sent_at) {
         const firstAlertTime = new Date(device.first_alert_sent_at).getTime()
-        const daysSinceFirst = (now - firstAlertTime) / (1000 * 60 * 60 * 24)
+        const daysSinceFirst = (nowMs - firstAlertTime) / (1000 * 60 * 60 * 24)
         if (daysSinceFirst > ALERT_MAX_WINDOW_DAYS) {
-          await supabase.from('devices').update({ alerts_enabled: false }).eq('id', device.id)
+          // Disable PdV alerts after max window
+          await supabase.from('points_of_sale').update({ alerts_enabled: false }).eq('id', pdv.id)
           continue
         }
       }
@@ -92,7 +125,7 @@ Deno.serve(async (req) => {
       }
 
       if (isLowStock) {
-        const sent = await trySendAlert(supabase, device, 'stock-bajo', hasAlertEmail, now, ALERT_COOLDOWN_DAYS, BCC_EMAIL, {
+        const sent = await trySendAlert(supabase, device, pdv, recipientEmail, 'stock-bajo', hasAlertEmail, nowMs, ALERT_COOLDOWN_DAYS, BCC_EMAIL, {
           branchName: device.branch_name,
           fixno: device.fixno,
           remainingCuts: remaining,
@@ -107,11 +140,11 @@ Deno.serve(async (req) => {
         : 0
 
       const daysSinceOnline = onlineTime > 0
-        ? Math.floor((now - onlineTime) / (1000 * 60 * 60 * 24))
+        ? Math.floor((nowMs - onlineTime) / (1000 * 60 * 60 * 24))
         : 999
 
       if (daysSinceOnline >= DEFAULT_DISCONNECTED_DAYS) {
-        const sent = await trySendAlert(supabase, device, 'dispositivo-desconectado', hasAlertEmail, now, ALERT_COOLDOWN_DAYS, BCC_EMAIL, {
+        const sent = await trySendAlert(supabase, device, pdv, recipientEmail, 'dispositivo-desconectado', hasAlertEmail, nowMs, ALERT_COOLDOWN_DAYS, BCC_EMAIL, {
           branchName: device.branch_name,
           fixno: device.fixno,
           daysSinceOnline,
@@ -130,6 +163,8 @@ Deno.serve(async (req) => {
 async function trySendAlert(
   supabase: any,
   device: any,
+  pdv: { id: string; name: string },
+  recipientEmail: string | null,
   templateName: string,
   hasAlertEmail: boolean,
   now: number,
@@ -172,7 +207,7 @@ async function trySendAlert(
       .from('email_send_log')
       .select('id')
       .eq('template_name', templateName)
-      .eq('recipient_email', device.alert_email)
+      .eq('recipient_email', recipientEmail)
       .gte('created_at', cooldownAgo)
       .limit(1)
 
@@ -181,7 +216,7 @@ async function trySendAlert(
     await supabase.functions.invoke('send-transactional-email', {
       body: {
         templateName,
-        recipientEmail: device.alert_email,
+        recipientEmail,
         idempotencyKey: `${templateName}-${device.fixno}-${today}`,
         templateData,
       },
