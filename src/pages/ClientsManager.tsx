@@ -350,6 +350,39 @@ function AssignDeviceDialog({
   );
 }
 
+// ── Assignment Row with Cuts ─────────────────────────────
+
+function AssignmentRow({ assignment, onUnassign }: { assignment: any; onUnassign: () => void }) {
+  const fixno = assignment.devices?.fixno;
+  const { data: cuts } = useAssignmentCuts(fixno, assignment.assigned_at, assignment.unassigned_at);
+
+  return (
+    <div className="flex items-center justify-between bg-muted/50 rounded px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Cpu className="w-3.5 h-3.5 text-primary" />
+        <span className="text-sm font-mono">{fixno}</span>
+        <span className="text-xs text-muted-foreground">{assignment.devices?.customer_name || ""}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {cuts != null && (
+          <span className="text-xs text-muted-foreground font-mono">{cuts.toLocaleString()} cortes</span>
+        )}
+        <span className="text-xs text-muted-foreground">
+          {new Date(assignment.assigned_at).toLocaleDateString("es-CL")}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={onUnassign}
+        >
+          <Unplug className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── PdV Row with Assignments ────────────────────────────
 
 function PdVRow({
