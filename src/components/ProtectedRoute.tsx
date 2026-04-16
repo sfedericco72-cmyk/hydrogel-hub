@@ -27,6 +27,9 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       return;
     }
 
+    // Reset to show spinner while re-checking
+    setNeedsOnboarding(undefined);
+
     async function checkOnboarding() {
       try {
         const { data: profile } = await supabase
@@ -54,7 +57,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
 
     checkOnboarding();
-  }, [session]);
+  }, [session, location.pathname]);
 
   if (session === undefined || (session && needsOnboarding === undefined)) {
     return (
