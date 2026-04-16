@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
-  useDefaultTenant,
   useClients,
   useCreateClient,
   useUpdateClient,
@@ -24,6 +23,7 @@ import {
   useUnassignDevice,
   useUnassignedDevices,
 } from "@/hooks/useClients";
+import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
