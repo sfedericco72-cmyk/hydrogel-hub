@@ -302,17 +302,28 @@ export default function Dashboard() {
 
 /* ─── Sub-components ─────────────────────────────────── */
 
-function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate }: {
+function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate, onShowWelcome }: {
   lastSyncDate: string | null;
   syncing: boolean;
   onSync: () => void;
   clientFilter: string;
   navigate: ReturnType<typeof useNavigate>;
+  onShowWelcome: () => void;
 }) {
   return (
     <div className="mb-8 flex items-start justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Panel de Control</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Panel de Control</h1>
+          <button
+            onClick={onShowWelcome}
+            className="text-muted-foreground hover:text-primary transition-colors"
+            aria-label="Mostrar bienvenida"
+            title="Acerca de CutMonitor"
+          >
+            <Info className="h-4 w-4" />
+          </button>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">Seguimiento de máquinas de corte de hidrogel</p>
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="h-3.5 w-3.5" />

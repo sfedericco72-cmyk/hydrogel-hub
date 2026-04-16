@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [emailAllowed, setEmailAllowed] = useState<boolean | undefined>(undefined);
   const [onboardingDone, setOnboardingDone] = useState<boolean | undefined>(undefined);
   const location = useLocation();
 
@@ -18,8 +19,59 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return () => subscription.unsubscribe();
   }, []);
 
+  // Whitelist gate: every authenticated session must have an allowed email
   useEffect(() => {
     if (!session) {
+      setEmailAllowed(undefined);
+      return;
+    }
+
+    const userEmail = session.user.email;
+    if (!userEmail) {
+      // No email on the session → block
+      supabase.auth.signOut().finally(() => {
+        window.location.replace("/auth?denied=1");
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setEmailAllowed(undefined);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("check-email-allowed", {
+          body: { email: userEmail, markUsed: true },
+        });
+        if (cancelled) return;
+        if (error) {
+          console.error("check-email-allowed error:", error);
+          // Fail closed: block if we can't validate
+          setEmailAllowed(false);
+          await supabase.auth.signOut();
+          window.location.replace("/auth?denied=1");
+          return;
+        }
+        const allowed = !!(data as any)?.allowed;
+        setEmailAllowed(allowed);
+        if (!allowed) {
+          await supabase.auth.signOut();
+          window.location.replace("/auth?denied=1");
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error("check-email-allowed exception:", err);
+        setEmailAllowed(false);
+        await supabase.auth.signOut();
+        window.location.replace("/auth?denied=1");
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session || emailAllowed !== true) {
       setOnboardingDone(undefined);
       return;
     }
@@ -61,10 +113,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
     check();
     return () => { cancelled = true; };
-  }, [session, location.pathname]);
+  }, [session, emailAllowed, location.pathname]);
 
   // Still loading
-  if (session === undefined || (session && onboardingDone === undefined)) {
+  if (
+    session === undefined ||
+    (session && emailAllowed === undefined) ||
+    (session && emailAllowed === true && onboardingDone === undefined)
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -74,6 +130,15 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   if (!session) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Email not in whitelist → already signed out + redirected, just render loader
+  if (emailAllowed === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
   }
 
   const isOnboardingPage = location.pathname === "/onboarding";
