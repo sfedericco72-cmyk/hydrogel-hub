@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
 import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
+import { sumLast6Months } from "@/lib/cuts";
 
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -113,8 +114,14 @@ export default function Dashboard() {
     return counts;
   }, [scopedDevices, lastCutDates]);
 
-  // Apply search + state filters to hierarchy
+  // Apply search + state filters to hierarchy, then sort by 6-month cuts (desc)
   const filteredHierarchy = useMemo(() => {
+    const cutsFor = (fixno: string) => sumLast6Months(monthlyCutsMap?.get(fixno));
+    const cmpDesc = (a: number, b: number, aName: string, bName: string) => {
+      if (b !== a) return b - a;
+      return aName.localeCompare(bName, "es");
+    };
+
     return scopedHierarchy.map(client => {
       const filteredPOS = client.pointsOfSale.map(pos => {
         const filteredDevices = pos.devices.filter(ad => {
@@ -132,11 +139,29 @@ export default function Dashboard() {
           )) return false;
           return true;
         });
-        return { ...pos, devices: filteredDevices };
+
+        // Sort devices within POS by 6m cuts desc
+        const sortedDevices = [...filteredDevices].sort((a, b) =>
+          cmpDesc(cutsFor(a.device.fixno), cutsFor(b.device.fixno), a.device.branch_name ?? a.device.fixno, b.device.branch_name ?? b.device.fixno)
+        );
+        const posCuts = sortedDevices.reduce((s, ad) => s + cutsFor(ad.device.fixno), 0);
+        return { ...pos, devices: sortedDevices, _cuts6m: posCuts };
       }).filter(pos => pos.devices.length > 0);
-      return { ...client, pointsOfSale: filteredPOS, deviceCount: filteredPOS.reduce((s, p) => s + p.devices.length, 0) };
-    }).filter(c => c.pointsOfSale.length > 0);
-  }, [scopedHierarchy, stateFilter, search, lastCutDates]);
+
+      // Sort POS within client by 6m cuts desc
+      const sortedPOS = [...filteredPOS].sort((a, b) => cmpDesc(a._cuts6m, b._cuts6m, a.name, b.name));
+      const clientCuts = sortedPOS.reduce((s, p) => s + p._cuts6m, 0);
+
+      return {
+        ...client,
+        pointsOfSale: sortedPOS,
+        deviceCount: sortedPOS.reduce((s, p) => s + p.devices.length, 0),
+        _cuts6m: clientCuts,
+      };
+    })
+      .filter(c => c.pointsOfSale.length > 0)
+      .sort((a, b) => cmpDesc(a._cuts6m, b._cuts6m, a.name, b.name));
+  }, [scopedHierarchy, stateFilter, search, lastCutDates, monthlyCutsMap]);
 
   async function handleSync() {
     setSyncing(true);
