@@ -1,38 +1,34 @@
 
 
-El usuario está en `/auth` (cutmonitor.com/auth) y dice que no ve el mensaje de beta ni la info que hablamos. Mirando la captura: solo se ve el card de "Inicia sesión para continuar" sin el aviso de beta.
+Sumo el ordenamiento por ranking de cortes a los cambios ya aprobados del `DeviceCard`.
 
-Revisando `src/pages/Auth.tsx`: el aviso amber con `ShieldAlert` que explica beta + invitación + email de contacto está dentro de `{!isLogin && (...)}` — solo se muestra en modo **registro**, no en login. Por eso no lo ve: está en la pantalla de login.
+## Orden de las tarjetas
 
-El `WelcomeBanner` con toda la info de beta + funcionalidad + acceso por invitación está en el **Dashboard**, que requiere estar logueado. Tampoco lo ve porque no entró todavía.
+Criterio: **suma de cortes de los últimos 6 meses** (mismo `monthlyCutsMap` filtrado por asignación que ya usamos para el total del card y el reporte). Así el "ranking" coincide con lo que el usuario ve en cada tarjeta.
 
-## Problema
+Jerarquía del orden (de fuera hacia adentro):
 
-El usuario nuevo (no logueado) no ve nada del contexto de beta hasta que hace click en "Regístrate" o entra a la app. La landing real es `/auth` en modo login y ahí no hay info.
+1. **Clientes** ordenados por suma total de cortes 6m de todos sus equipos (desc).
+2. **Puntos de venta** dentro de cada cliente: por suma de cortes 6m del PdV (desc).
+3. **Equipos** dentro de cada PdV: por cortes 6m del equipo (desc).
 
-## Propuesta
+Los que tengan 0 cortes en 6 meses van al final, ordenados alfabéticamente para que sean predecibles.
 
-Mostrar el aviso de beta + invitación **siempre** en `/auth` (no solo en signup). Dos opciones de presentación:
+## Implementación
 
-**A. Mover el aviso fuera del `{!isLogin && ...}`** para que se muestre en login y signup. Mismo bloque amber compacto que ya existe.
-
-**B. Agregar arriba del card un bloque más visible** estilo mini-hero: título "CutMonitor (BETA)", una línea de qué hace + conexión con cutabc.cn, y la nota de invitación con email. Más vendedor y deja claro de qué se trata antes de pedir credenciales.
-
-Recomiendo **B** porque es la primera impresión pública del producto y hoy es muy seca. El bloque va arriba del Card, ancho similar (max-w-md), tono sutil para no competir con el form.
-
-## Cambio único
+Helper `sumLast6Months(deviceMonthlyCuts)` ya implícito en los cambios previos del card. Lo extraigo a un util compartido (`src/lib/cuts.ts`) y lo reutilizo en `Dashboard.tsx` al construir `filteredHierarchy` (después del filtro por estado/búsqueda y antes del render):
 
 ```text
-EDIT src/pages/Auth.tsx — agregar bloque informativo arriba del Card,
-                          visible siempre (login y signup).
-                          Mantener el ShieldAlert dentro de signup como refuerzo
-                          o quitarlo (queda redundante). Propongo quitarlo.
+EDIT src/lib/cuts.ts                     — NEW: sumLast6Months(monthMap)
+EDIT src/pages/Dashboard.tsx             — sort cliente → PdV → equipo por cortes 6m desc
+EDIT src/components/DeviceCard.tsx       — (cambios previos ya aprobados) usar mismo util para total
 ```
 
-Contenido del bloque (arriba del Card, mismo max-w-md):
-- Badge "BETA" + título "CutMonitor"
-- 1 línea: "Monitoreo en tiempo real de máquinas de corte de hidrogel conectadas a CutABC (cutabc.cn)."
-- 1 línea con ícono mail: "Acceso por invitación. Solicitá autorización a cutmonitor@bitec.cl indicando empresa y email."
+Sin cambios en hooks ni queries — `monthlyCutsMap` ya viene listo y filtrado por asignación.
 
-Sin lista larga de features (eso queda para el WelcomeBanner del Dashboard, post-login). Acá solo lo mínimo para que entiendan qué es y cómo pedir acceso.
+## Detalles UX
+
+- El orden se aplica solo al panel principal de tarjetas. El árbol de Clientes del sidebar se mantiene alfabético (es navegación, no ranking).
+- Si el usuario filtra por un cliente o cambia el filtro de estado, el ranking se recalcula sobre el subconjunto visible.
+- Sin badges ni números de ranking visibles — el orden mismo comunica la prioridad.
 
