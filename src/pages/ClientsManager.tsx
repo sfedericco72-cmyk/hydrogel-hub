@@ -1075,60 +1075,73 @@ export default function ClientsManager() {
           />
         )}
 
-        {isLoading ? (
-          <p className="text-muted-foreground">Cargando...</p>
-        ) : clients.length === 0 ? (
-          <Card className="bg-card border-border">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Sin clientes</h2>
-              <p className="text-sm text-muted-foreground mb-4">Creá tu primer cliente o importalos desde un archivo CSV/Excel.</p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setImportOpen(true)}>
-                  <Upload className="w-4 h-4 mr-2" /> Importar
-                </Button>
-                <Button onClick={() => setCreateOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" /> Crear primer cliente
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : filteredClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic px-2">
-            {searchQuery
-              ? `Sin resultados para “${searchQuery}”`
-              : "Ningún cliente coincide con el filtro de alertas."}
-          </p>
-        ) : (
-          <>
-            <ClientGroup
-              title="Con equipos asignados"
-              icon={Users}
-              clients={withDevices}
-              tenantId={tenantId!}
-              defaultOpen={true}
-              searchQuery={searchQuery}
-              matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={effectiveForceExpand}
-              alertSummaries={alertData?.byClient}
-              globallyPaused={isPaused}
-              alertFilter={alertFilter}
-            />
-            <ClientGroup
-              title="Sin equipos asignados"
-              icon={UserX}
-              clients={withoutDevices}
-              tenantId={tenantId!}
-              defaultOpen={!!searchQuery || alertFilter !== "all"}
-              searchQuery={searchQuery}
-              matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={effectiveForceExpand}
-              alertSummaries={alertData?.byClient}
-              globallyPaused={isPaused}
-              alertFilter={alertFilter}
-            />
-          </>
-        )}
+        <Tabs defaultValue="clientes" className="w-full">
+          <TabsList>
+            <TabsTrigger value="clientes"><Building2 className="w-4 h-4 mr-1.5" />Clientes</TabsTrigger>
+            <TabsTrigger value="alertas"><Mail className="w-4 h-4 mr-1.5" />Historial de alertas</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="clientes" className="space-y-4 mt-4">
+            {isLoading ? (
+              <p className="text-muted-foreground">Cargando...</p>
+            ) : clients.length === 0 ? (
+              <Card className="bg-card border-border">
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
+                  <h2 className="text-lg font-semibold mb-2">Sin clientes</h2>
+                  <p className="text-sm text-muted-foreground mb-4">Creá tu primer cliente o importalos desde un archivo CSV/Excel.</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setImportOpen(true)}>
+                      <Upload className="w-4 h-4 mr-2" /> Importar
+                    </Button>
+                    <Button onClick={() => setCreateOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" /> Crear primer cliente
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : filteredClients.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic px-2">
+                {searchQuery
+                  ? `Sin resultados para “${searchQuery}”`
+                  : "Ningún cliente coincide con el filtro de alertas."}
+              </p>
+            ) : (
+              <>
+                <ClientGroup
+                  title="Con equipos asignados"
+                  icon={Users}
+                  clients={withDevices}
+                  tenantId={tenantId!}
+                  defaultOpen={true}
+                  searchQuery={searchQuery}
+                  matchedPdvByClient={searchMatches.matchedPdvByClient}
+                  forceExpandClients={effectiveForceExpand}
+                  alertSummaries={alertData?.byClient}
+                  globallyPaused={isPaused}
+                  alertFilter={alertFilter}
+                />
+                <ClientGroup
+                  title="Sin equipos asignados"
+                  icon={UserX}
+                  clients={withoutDevices}
+                  tenantId={tenantId!}
+                  defaultOpen={!!searchQuery || alertFilter !== "all"}
+                  searchQuery={searchQuery}
+                  matchedPdvByClient={searchMatches.matchedPdvByClient}
+                  forceExpandClients={effectiveForceExpand}
+                  alertSummaries={alertData?.byClient}
+                  globallyPaused={isPaused}
+                  alertFilter={alertFilter}
+                />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="alertas" className="mt-4">
+            <GlobalAlertHistory />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {createOpen && tenantId && (
