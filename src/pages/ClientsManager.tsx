@@ -432,13 +432,15 @@ function PdVRow({
   onDelete,
   forceExpanded,
   searchQuery,
+  globallyPaused,
 }: {
-  pdv: { id: string; name: string; address: string | null; city: string | null };
+  pdv: { id: string; name: string; address: string | null; city: string | null; alerts_enabled?: boolean; alert_email?: string | null };
   tenantId: string;
   onEdit: () => void;
   onDelete: () => void;
   forceExpanded?: boolean;
   searchQuery?: string;
+  globallyPaused?: boolean;
 }) {
   const [expandedState, setExpanded] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -454,15 +456,21 @@ function PdVRow({
   return (
     <div className="border border-border rounded-lg bg-secondary/30">
       <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => !forceExpanded && setExpanded(!expanded)}>
-        <div className="flex items-center gap-3">
-          {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-          <MapPin className="w-4 h-4 text-primary" />
-          <div>
+        <div className="flex items-center gap-3 min-w-0">
+          {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+          <MapPin className="w-4 h-4 text-primary shrink-0" />
+          <div className="min-w-0 flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{pdv.name}</span>
-            {pdv.city && <span className="text-xs text-muted-foreground ml-2">{pdv.city}</span>}
+            {pdv.city && <span className="text-xs text-muted-foreground">{pdv.city}</span>}
+            <AlertsStatusBadge
+              mode="individual"
+              alertsEnabled={pdv.alerts_enabled ?? true}
+              alertEmail={pdv.alert_email ?? null}
+              globallyPaused={globallyPaused}
+            />
           </div>
         </div>
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}><Pencil className="w-3.5 h-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></Button>
         </div>
