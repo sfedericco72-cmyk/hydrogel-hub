@@ -586,12 +586,18 @@ function ClientCard({
   forceExpanded,
   searchQuery,
   matchedPdvIds,
+  alertSummary,
+  globallyPaused,
+  alertFilter,
 }: {
   client: any;
   tenantId: string;
   forceExpanded?: boolean;
   searchQuery?: string;
   matchedPdvIds?: Set<string>;
+  alertSummary?: PdvAlertSummary;
+  globallyPaused?: boolean;
+  alertFilter?: AlertFilter;
 }) {
   const [expandedState, setExpanded] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -602,19 +608,33 @@ function ClientCard({
   const expanded = forceExpanded || expandedState;
   const { data: pdvs = [] } = usePointsOfSale(expanded ? client.id : undefined);
 
+  const visiblePdvs = useMemo(() => {
+    if (!alertFilter || alertFilter === "all") return pdvs;
+    return pdvs.filter((p: any) => {
+      const hasEmail = !!p.alert_email?.trim();
+      if (alertFilter === "on") return p.alerts_enabled && hasEmail;
+      if (alertFilter === "no_email") return p.alerts_enabled && !hasEmail;
+      if (alertFilter === "off") return !p.alerts_enabled;
+      return true;
+    });
+  }, [pdvs, alertFilter]);
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2 cursor-pointer" onClick={() => !forceExpanded && setExpanded(!expanded)}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-            <Building2 className="w-5 h-5 text-primary" />
-            <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+            {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+            <Building2 className="w-5 h-5 text-primary shrink-0" />
+            <div className="flex items-center gap-2 flex-wrap">
               {client.code && <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{client.code}</span>}
               <CardTitle className="text-base">{client.name}</CardTitle>
+              {alertSummary && (
+                <AlertsStatusBadge mode="aggregate" summary={alertSummary} globallyPaused={globallyPaused} />
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditOpen(true)}>
               <Pencil className="w-4 h-4" />
             </Button>
@@ -659,15 +679,18 @@ function ClientCard({
 
           {pdvs.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">No hay puntos de venta</p>
+          ) : visiblePdvs.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">Ningún PdV coincide con el filtro</p>
           ) : (
             <div className="space-y-2">
-              {pdvs.map((pdv) => (
+              {visiblePdvs.map((pdv) => (
                 <PdVRow
                   key={pdv.id}
                   pdv={pdv}
                   tenantId={tenantId}
                   forceExpanded={matchedPdvIds?.has(pdv.id)}
                   searchQuery={searchQuery}
+                  globallyPaused={globallyPaused}
                   onEdit={() => { setEditPdV(pdv); setPdvDialogOpen(true); }}
                   onDelete={() => {
                     if (confirm(`¿Eliminar punto de venta "${pdv.name}"?`)) {
@@ -697,6 +720,7 @@ function ClientCard({
     </Card>
   );
 }
+
 
 // ── Group Section ───────────────────────────────────────
 
