@@ -733,6 +733,9 @@ function ClientGroup({
   searchQuery,
   matchedPdvByClient,
   forceExpandClients,
+  alertSummaries,
+  globallyPaused,
+  alertFilter,
 }: {
   title: string;
   icon: any;
@@ -742,6 +745,9 @@ function ClientGroup({
   searchQuery: string;
   matchedPdvByClient: Map<string, Set<string>>;
   forceExpandClients: Set<string>;
+  alertSummaries?: Map<string, PdvAlertSummary>;
+  globallyPaused?: boolean;
+  alertFilter?: AlertFilter;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (clients.length === 0) return null;
@@ -768,6 +774,9 @@ function ClientGroup({
               forceExpanded={forceExpandClients.has(client.id)}
               searchQuery={searchQuery}
               matchedPdvIds={matchedPdvByClient.get(client.id)}
+              alertSummary={alertSummaries?.get(client.id)}
+              globallyPaused={globallyPaused}
+              alertFilter={alertFilter}
             />
           ))}
         </div>
