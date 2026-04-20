@@ -186,6 +186,41 @@ export function useDeviceAssignmentHistory(pointOfSaleId?: string) {
   });
 }
 
+/** Per-client aggregate of PdV alert configuration health */
+export interface PdvAlertSummary {
+  total: number;
+  on_with_email: number;
+  on_no_email: number;
+  off: number;
+}
+
+export function useAllPdvAlertSummaries() {
+  return useQuery({
+    queryKey: ["pdv-alert-summaries"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("points_of_sale")
+        .select("id, client_id, alerts_enabled, alert_email");
+      if (error) throw error;
+      const byClient = new Map<string, PdvAlertSummary>();
+      const byPdv = new Map<string, { alerts_enabled: boolean; alert_email: string | null }>();
+      (data || []).forEach((p: any) => {
+        byPdv.set(p.id, { alerts_enabled: !!p.alerts_enabled, alert_email: p.alert_email });
+        const cur = byClient.get(p.client_id) ?? { total: 0, on_with_email: 0, on_no_email: 0, off: 0 };
+        cur.total += 1;
+        if (p.alerts_enabled) {
+          if (p.alert_email && p.alert_email.trim()) cur.on_with_email += 1;
+          else cur.on_no_email += 1;
+        } else {
+          cur.off += 1;
+        }
+        byClient.set(p.client_id, cur);
+      });
+      return { byClient, byPdv };
+    },
+  });
+}
+
 /** Active assignment counts per client_id (for "with/without devices" grouping) */
 export function useClientAssignmentCounts() {
   return useQuery({

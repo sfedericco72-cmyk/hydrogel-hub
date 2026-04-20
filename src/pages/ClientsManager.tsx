@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX, Pause, AlertTriangle } from "lucide-react";
 import { PdVAlertSettings } from "@/components/PdVAlertSettings";
 import { GlobalAlertsPauseDialog } from "@/components/GlobalAlertsPauseDialog";
 import { UnassignedDevicesSection } from "@/components/UnassignedDevicesSection";
 import { UnassignDialog } from "@/components/UnassignDialog";
 import { ExportClientsButton } from "@/components/ExportClientsButton";
+import { AlertsStatusBadge } from "@/components/AlertsStatusBadge";
 import { useTenantSettings } from "@/hooks/useTenantSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,11 +31,17 @@ import {
   useUnassignDevice,
   useUnassignedDevices,
   useClientAssignmentCounts,
+  useAllPdvAlertSummaries,
+  type PdvAlertSummary,
 } from "@/hooks/useClients";
 import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
+import { cn } from "@/lib/utils";
+
+export type AlertFilter = "all" | "on" | "no_email" | "off";
+
 
 // ── Client Form Dialog ──────────────────────────────────
 
@@ -426,13 +433,15 @@ function PdVRow({
   onDelete,
   forceExpanded,
   searchQuery,
+  globallyPaused,
 }: {
-  pdv: { id: string; name: string; address: string | null; city: string | null };
+  pdv: { id: string; name: string; address: string | null; city: string | null; alerts_enabled?: boolean; alert_email?: string | null };
   tenantId: string;
   onEdit: () => void;
   onDelete: () => void;
   forceExpanded?: boolean;
   searchQuery?: string;
+  globallyPaused?: boolean;
 }) {
   const [expandedState, setExpanded] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -448,15 +457,21 @@ function PdVRow({
   return (
     <div className="border border-border rounded-lg bg-secondary/30">
       <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => !forceExpanded && setExpanded(!expanded)}>
-        <div className="flex items-center gap-3">
-          {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-          <MapPin className="w-4 h-4 text-primary" />
-          <div>
+        <div className="flex items-center gap-3 min-w-0">
+          {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+          <MapPin className="w-4 h-4 text-primary shrink-0" />
+          <div className="min-w-0 flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{pdv.name}</span>
-            {pdv.city && <span className="text-xs text-muted-foreground ml-2">{pdv.city}</span>}
+            {pdv.city && <span className="text-xs text-muted-foreground">{pdv.city}</span>}
+            <AlertsStatusBadge
+              mode="individual"
+              alertsEnabled={pdv.alerts_enabled ?? true}
+              alertEmail={pdv.alert_email ?? null}
+              globallyPaused={globallyPaused}
+            />
           </div>
         </div>
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}><Pencil className="w-3.5 h-3.5" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></Button>
         </div>
@@ -572,12 +587,18 @@ function ClientCard({
   forceExpanded,
   searchQuery,
   matchedPdvIds,
+  alertSummary,
+  globallyPaused,
+  alertFilter,
 }: {
   client: any;
   tenantId: string;
   forceExpanded?: boolean;
   searchQuery?: string;
   matchedPdvIds?: Set<string>;
+  alertSummary?: PdvAlertSummary;
+  globallyPaused?: boolean;
+  alertFilter?: AlertFilter;
 }) {
   const [expandedState, setExpanded] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -588,19 +609,33 @@ function ClientCard({
   const expanded = forceExpanded || expandedState;
   const { data: pdvs = [] } = usePointsOfSale(expanded ? client.id : undefined);
 
+  const visiblePdvs = useMemo(() => {
+    if (!alertFilter || alertFilter === "all") return pdvs;
+    return pdvs.filter((p: any) => {
+      const hasEmail = !!p.alert_email?.trim();
+      if (alertFilter === "on") return p.alerts_enabled && hasEmail;
+      if (alertFilter === "no_email") return p.alerts_enabled && !hasEmail;
+      if (alertFilter === "off") return !p.alerts_enabled;
+      return true;
+    });
+  }, [pdvs, alertFilter]);
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2 cursor-pointer" onClick={() => !forceExpanded && setExpanded(!expanded)}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-            <Building2 className="w-5 h-5 text-primary" />
-            <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+            {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+            <Building2 className="w-5 h-5 text-primary shrink-0" />
+            <div className="flex items-center gap-2 flex-wrap">
               {client.code && <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{client.code}</span>}
               <CardTitle className="text-base">{client.name}</CardTitle>
+              {alertSummary && (
+                <AlertsStatusBadge mode="aggregate" summary={alertSummary} globallyPaused={globallyPaused} />
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditOpen(true)}>
               <Pencil className="w-4 h-4" />
             </Button>
@@ -645,15 +680,18 @@ function ClientCard({
 
           {pdvs.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">No hay puntos de venta</p>
+          ) : visiblePdvs.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">Ningún PdV coincide con el filtro</p>
           ) : (
             <div className="space-y-2">
-              {pdvs.map((pdv) => (
+              {visiblePdvs.map((pdv) => (
                 <PdVRow
                   key={pdv.id}
                   pdv={pdv}
                   tenantId={tenantId}
                   forceExpanded={matchedPdvIds?.has(pdv.id)}
                   searchQuery={searchQuery}
+                  globallyPaused={globallyPaused}
                   onEdit={() => { setEditPdV(pdv); setPdvDialogOpen(true); }}
                   onDelete={() => {
                     if (confirm(`¿Eliminar punto de venta "${pdv.name}"?`)) {
@@ -684,6 +722,7 @@ function ClientCard({
   );
 }
 
+
 // ── Group Section ───────────────────────────────────────
 
 function ClientGroup({
@@ -695,6 +734,9 @@ function ClientGroup({
   searchQuery,
   matchedPdvByClient,
   forceExpandClients,
+  alertSummaries,
+  globallyPaused,
+  alertFilter,
 }: {
   title: string;
   icon: any;
@@ -704,6 +746,9 @@ function ClientGroup({
   searchQuery: string;
   matchedPdvByClient: Map<string, Set<string>>;
   forceExpandClients: Set<string>;
+  alertSummaries?: Map<string, PdvAlertSummary>;
+  globallyPaused?: boolean;
+  alertFilter?: AlertFilter;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (clients.length === 0) return null;
@@ -730,6 +775,9 @@ function ClientGroup({
               forceExpanded={forceExpandClients.has(client.id)}
               searchQuery={searchQuery}
               matchedPdvIds={matchedPdvByClient.get(client.id)}
+              alertSummary={alertSummaries?.get(client.id)}
+              globallyPaused={globallyPaused}
+              alertFilter={alertFilter}
             />
           ))}
         </div>
@@ -747,16 +795,26 @@ export default function ClientsManager() {
   const { data: settings } = useTenantSettings();
   const { data: assignmentCounts } = useClientAssignmentCounts();
   const { data: unassignedDevices = [] } = useUnassignedDevices();
+  const { data: alertData } = useAllPdvAlertSummaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
   const [assignFromUnassigned, setAssignFromUnassigned] = useState<{ deviceId: string } | null>(null);
   const [pickPdvOpen, setPickPdvOpen] = useState(false);
 
   const isPaused = settings?.alerts_paused_until
     ? new Date(settings.alerts_paused_until).getTime() > Date.now()
     : false;
+
+  const pausedUntilLabel = settings?.alerts_paused_until
+    ? new Date(settings.alerts_paused_until).toLocaleDateString("es-CL", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
 
   // Search-driven expansion data: which PdV / clients to auto-expand
   const [searchMatches, setSearchMatches] = useState<{
@@ -832,10 +890,25 @@ export default function ClientsManager() {
     return () => { cancelled = true; };
   }, [searchQuery, clients]);
 
+  // Filter by alert config: only show clients that have at least one PdV matching the chosen filter.
+  const alertFilteredClients = useMemo(() => {
+    if (alertFilter === "all") return clients;
+    const summaries = alertData?.byClient;
+    if (!summaries) return clients;
+    return clients.filter((c) => {
+      const s = summaries.get(c.id);
+      if (!s) return false;
+      if (alertFilter === "on") return s.on_with_email > 0;
+      if (alertFilter === "no_email") return s.on_no_email > 0;
+      if (alertFilter === "off") return s.off > 0;
+      return true;
+    });
+  }, [clients, alertFilter, alertData]);
+
   const filteredClients = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return clients;
-    return clients.filter((c) => {
+    if (!q) return alertFilteredClients;
+    return alertFilteredClients.filter((c) => {
       const directHit =
         c.name?.toLowerCase().includes(q) ||
         c.code?.toLowerCase().includes(q) ||
@@ -845,7 +918,15 @@ export default function ClientsManager() {
       const childHit = searchMatches.forceExpandClients.has(c.id);
       return directHit || childHit;
     });
-  }, [clients, searchQuery, searchMatches]);
+  }, [alertFilteredClients, searchQuery, searchMatches]);
+
+  // When alert filter is active, force-expand matching clients so the user sees the matching PdV.
+  const effectiveForceExpand = useMemo(() => {
+    if (alertFilter === "all") return searchMatches.forceExpandClients;
+    const set = new Set(searchMatches.forceExpandClients);
+    filteredClients.forEach((c) => set.add(c.id));
+    return set;
+  }, [searchMatches.forceExpandClients, filteredClients, alertFilter]);
 
   const { withDevices, withoutDevices } = useMemo(() => {
     const counts = assignmentCounts || new Map();
@@ -901,15 +982,53 @@ export default function ClientsManager() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-6 space-y-4">
-        {/* Global search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar cliente, punto de venta o equipo (fixno, sucursal)..."
-            className="pl-9 h-10"
-          />
+        {/* Global pause banner */}
+        {isPaused && (
+          <div className="flex items-center gap-3 rounded-lg border border-status-warning/30 bg-status-warning/10 px-4 py-3 text-sm">
+            <Pause className="h-4 w-4 text-status-warning shrink-0" />
+            <div className="flex-1 text-status-warning">
+              Alertas pausadas hasta el <strong>{pausedUntilLabel}</strong>. Ningún cliente recibirá emails durante este período.
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setPauseOpen(true)}>
+              Gestionar
+            </Button>
+          </div>
+        )}
+
+        {/* Global search + alert filter chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar cliente, punto de venta o equipo (fixno, sucursal)..."
+              className="pl-9 h-10"
+            />
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+            {([
+              { key: "all", label: "Todos", icon: null },
+              { key: "on", label: "Con alertas", icon: Bell },
+              { key: "no_email", label: "Sin email", icon: AlertTriangle },
+              { key: "off", label: "OFF", icon: BellOff },
+            ] as const).map(({ key, label, icon: Ic }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setAlertFilter(key as AlertFilter)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                  alertFilter === key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                )}
+              >
+                {Ic && <Ic className="h-3 w-3" />}
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Unassigned devices section */}
@@ -940,7 +1059,11 @@ export default function ClientsManager() {
             </CardContent>
           </Card>
         ) : filteredClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic px-2">Sin resultados para “{searchQuery}”</p>
+          <p className="text-sm text-muted-foreground italic px-2">
+            {searchQuery
+              ? `Sin resultados para “${searchQuery}”`
+              : "Ningún cliente coincide con el filtro de alertas."}
+          </p>
         ) : (
           <>
             <ClientGroup
@@ -951,17 +1074,23 @@ export default function ClientsManager() {
               defaultOpen={true}
               searchQuery={searchQuery}
               matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={searchMatches.forceExpandClients}
+              forceExpandClients={effectiveForceExpand}
+              alertSummaries={alertData?.byClient}
+              globallyPaused={isPaused}
+              alertFilter={alertFilter}
             />
             <ClientGroup
               title="Sin equipos asignados"
               icon={UserX}
               clients={withoutDevices}
               tenantId={tenantId!}
-              defaultOpen={!!searchQuery}
+              defaultOpen={!!searchQuery || alertFilter !== "all"}
               searchQuery={searchQuery}
               matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={searchMatches.forceExpandClients}
+              forceExpandClients={effectiveForceExpand}
+              alertSummaries={alertData?.byClient}
+              globallyPaused={isPaused}
+              alertFilter={alertFilter}
             />
           </>
         )}
