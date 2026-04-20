@@ -38,6 +38,7 @@ import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
+import { cn } from "@/lib/utils";
 
 export type AlertFilter = "all" | "on" | "no_email" | "off";
 
