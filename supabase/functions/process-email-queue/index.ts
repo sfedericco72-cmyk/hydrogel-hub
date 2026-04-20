@@ -60,13 +60,16 @@ async function moveToDlq(
   reason: string
 ): Promise<void> {
   const payload = msg.message
-  await supabase.from('email_send_log').insert({
-    message_id: payload.message_id,
-    template_name: (payload.label || queue) as string,
-    recipient_email: payload.to,
-    status: 'dlq',
-    error_message: reason,
-  })
+  if (payload.skip_log !== true) {
+    await supabase.from('email_send_log').insert({
+      message_id: payload.message_id,
+      template_name: (payload.label || queue) as string,
+      recipient_email: payload.to,
+      status: 'dlq',
+      error_message: reason,
+      metadata: (payload.metadata ?? null) as Record<string, unknown> | null,
+    })
+  }
   const { error } = await supabase.rpc('move_to_dlq', {
     source_queue: queue,
     dlq_name: `${queue}_dlq`,
@@ -270,13 +273,16 @@ Deno.serve(async (req) => {
           { apiKey, sendUrl: Deno.env.get('LOVABLE_SEND_URL') }
         )
 
-        // Log success
-        await supabase.from('email_send_log').insert({
-          message_id: payload.message_id,
-          template_name: payload.label || queue,
-          recipient_email: payload.to,
-          status: 'sent',
-        })
+        // Log success (skip when payload.skip_log is true — used for shadow BCC copies)
+        if (payload.skip_log !== true) {
+          await supabase.from('email_send_log').insert({
+            message_id: payload.message_id,
+            template_name: payload.label || queue,
+            recipient_email: payload.to,
+            status: 'sent',
+            metadata: (payload.metadata ?? null) as Record<string, unknown> | null,
+          })
+        }
 
         // Delete from queue
         const { error: delError } = await supabase.rpc('delete_email', {
@@ -298,13 +304,16 @@ Deno.serve(async (req) => {
         })
 
         if (isRateLimited(error)) {
-          await supabase.from('email_send_log').insert({
-            message_id: payload.message_id,
-            template_name: payload.label || queue,
-            recipient_email: payload.to,
-            status: 'rate_limited',
-            error_message: errorMsg.slice(0, 1000),
-          })
+          if (payload.skip_log !== true) {
+            await supabase.from('email_send_log').insert({
+              message_id: payload.message_id,
+              template_name: payload.label || queue,
+              recipient_email: payload.to,
+              status: 'rate_limited',
+              error_message: errorMsg.slice(0, 1000),
+              metadata: (payload.metadata ?? null) as Record<string, unknown> | null,
+            })
+          }
 
           const retryAfterSecs = getRetryAfterSeconds(error)
           await supabase
@@ -335,13 +344,16 @@ Deno.serve(async (req) => {
         }
 
         // Log non-429 failures to track real retry attempts.
-        await supabase.from('email_send_log').insert({
-          message_id: payload.message_id,
-          template_name: payload.label || queue,
-          recipient_email: payload.to,
-          status: 'failed',
-          error_message: errorMsg.slice(0, 1000),
-        })
+        if (payload.skip_log !== true) {
+          await supabase.from('email_send_log').insert({
+            message_id: payload.message_id,
+            template_name: payload.label || queue,
+            recipient_email: payload.to,
+            status: 'failed',
+            error_message: errorMsg.slice(0, 1000),
+            metadata: (payload.metadata ?? null) as Record<string, unknown> | null,
+          })
+        }
         if (payload?.message_id && typeof payload.message_id === 'string') {
           failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
         }
