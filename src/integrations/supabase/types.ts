@@ -640,6 +640,7 @@ export type Database = {
         Row: {
           alert_cooldown_days: number
           alert_max_window_days: number
+          alerts_check_hour: number
           alerts_paused_until: string | null
           attach_rate_green: number
           attach_rate_yellow: number
@@ -662,6 +663,7 @@ export type Database = {
         Insert: {
           alert_cooldown_days?: number
           alert_max_window_days?: number
+          alerts_check_hour?: number
           alerts_paused_until?: string | null
           attach_rate_green?: number
           attach_rate_yellow?: number
@@ -684,6 +686,7 @@ export type Database = {
         Update: {
           alert_cooldown_days?: number
           alert_max_window_days?: number
+          alerts_check_hour?: number
           alerts_paused_until?: string | null
           attach_rate_green?: number
           attach_rate_yellow?: number
