@@ -727,8 +727,38 @@ function ClientCard({
   );
 }
 
+// ── Per-Client Alert History (collapsible) ────────────
+function ClientAlertHistorySection({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
+  const { data: history = [], isLoading } = useAlertHistory(60);
+  const filtered = useMemo(() => history.filter(h => h.client_id === clientId), [history, clientId]);
 
-// ── Group Section ───────────────────────────────────────
+  return (
+    <div className="border-t border-border pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        <Mail className="w-3.5 h-3.5" />
+        <span className="uppercase tracking-wide">Historial de alertas</span>
+        <Badge variant="secondary" className="text-[10px]">{filtered.length}</Badge>
+      </button>
+      {open && (
+        <div className="mt-2">
+          <AlertHistoryTable
+            entries={filtered}
+            isLoading={isLoading}
+            showClient={false}
+            pageSize={20}
+            emptyMessage="Este cliente no tiene alertas enviadas en los últimos 60 días."
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ClientGroup({
   title,
