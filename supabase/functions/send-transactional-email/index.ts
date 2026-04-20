@@ -60,6 +60,8 @@ Deno.serve(async (req) => {
   let idempotencyKey: string
   let messageId: string
   let templateData: Record<string, any> = {}
+  let metadata: Record<string, any> | null = null
+  let skipLog = false
   try {
     const body = await req.json()
     templateName = body.templateName || body.template_name
@@ -69,6 +71,10 @@ Deno.serve(async (req) => {
     if (body.templateData && typeof body.templateData === 'object') {
       templateData = body.templateData
     }
+    if (body.metadata && typeof body.metadata === 'object') {
+      metadata = body.metadata
+    }
+    skipLog = body.skipLog === true || body.skip_log === true
   } catch {
     return new Response(
       JSON.stringify({ error: 'Invalid JSON in request body' }),
@@ -301,12 +307,17 @@ Deno.serve(async (req) => {
   // The dispatcher (process-email-queue) handles sending, retries, and rate-limit backoff.
 
   // Log pending BEFORE enqueue so we have a record even if enqueue crashes
-  await supabase.from('email_send_log').insert({
-    message_id: messageId,
-    template_name: templateName,
-    recipient_email: effectiveRecipient,
-    status: 'pending',
-  })
+  // (skipLog=true is used for "shadow" copies like BCC monitoring — the email
+  // is still sent but no row is added to email_send_log, keeping the history clean)
+  if (!skipLog) {
+    await supabase.from('email_send_log').insert({
+      message_id: messageId,
+      template_name: templateName,
+      recipient_email: effectiveRecipient,
+      status: 'pending',
+      metadata,
+    })
+  }
 
   const { error: enqueueError } = await supabase.rpc('enqueue_email', {
     queue_name: 'transactional_emails',
@@ -323,6 +334,8 @@ Deno.serve(async (req) => {
       idempotency_key: idempotencyKey,
       unsubscribe_token: unsubscribeToken,
       queued_at: new Date().toISOString(),
+      metadata,
+      skip_log: skipLog,
     },
   })
 
@@ -333,13 +346,16 @@ Deno.serve(async (req) => {
       effectiveRecipient,
     })
 
-    await supabase.from('email_send_log').insert({
-      message_id: messageId,
-      template_name: templateName,
-      recipient_email: effectiveRecipient,
-      status: 'failed',
-      error_message: 'Failed to enqueue email',
-    })
+    if (!skipLog) {
+      await supabase.from('email_send_log').insert({
+        message_id: messageId,
+        template_name: templateName,
+        recipient_email: effectiveRecipient,
+        status: 'failed',
+        error_message: 'Failed to enqueue email',
+        metadata,
+      })
+    }
 
     return new Response(JSON.stringify({ error: 'Failed to enqueue email' }), {
       status: 500,
