@@ -1008,7 +1008,7 @@ export default function ClientsManager() {
           </div>
           <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
             {([
-              { key: "all", label: "Todos" },
+              { key: "all", label: "Todos", icon: null },
               { key: "on", label: "Con alertas", icon: Bell },
               { key: "no_email", label: "Sin email", icon: AlertTriangle },
               { key: "off", label: "OFF", icon: BellOff },
