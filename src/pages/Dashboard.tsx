@@ -27,20 +27,47 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [search, setSearch] = useState(() => searchParams.get("q") || "");
-  const [clientFilter, setClientFilter] = useState<ClientFilter>(() => searchParams.get("client") || "all");
-  const [stateFilter, setStateFilter] = useState<StateFilter>(() => (searchParams.get("state") as StateFilter) || "all");
+  // Persisted defaults: stateFilter="active", clientFilter="all", clientsExpanded=false.
+  // URL params take precedence over sessionStorage so deep links keep working.
+  const persisted = (() => {
+    if (typeof window === "undefined") return {} as any;
+    try {
+      return JSON.parse(sessionStorage.getItem("dashboard:filters") || "{}");
+    } catch {
+      return {} as any;
+    }
+  })();
+
+  const [search, setSearch] = useState(
+    () => searchParams.get("q") ?? persisted.search ?? "",
+  );
+  const [clientFilter, setClientFilter] = useState<ClientFilter>(
+    () => searchParams.get("client") ?? persisted.clientFilter ?? "all",
+  );
+  const [stateFilter, setStateFilter] = useState<StateFilter>(
+    () => (searchParams.get("state") as StateFilter) ?? persisted.stateFilter ?? "active",
+  );
   const [syncing, setSyncing] = useState(false);
-  const [clientsExpanded, setClientsExpanded] = useState(true);
+  const [clientsExpanded, setClientsExpanded] = useState<boolean>(
+    () => persisted.clientsExpanded ?? false,
+  );
   const [welcomeForceOpen, setWelcomeForceOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (search) params.set("q", search);
     if (clientFilter !== "all") params.set("client", clientFilter);
-    if (stateFilter !== "all") params.set("state", stateFilter);
+    if (stateFilter !== "active") params.set("state", stateFilter);
     setSearchParams(params, { replace: true });
-  }, [search, clientFilter, stateFilter, setSearchParams]);
+    try {
+      sessionStorage.setItem(
+        "dashboard:filters",
+        JSON.stringify({ search, clientFilter, stateFilter, clientsExpanded }),
+      );
+    } catch {
+      /* ignore quota / disabled storage */
+    }
+  }, [search, clientFilter, stateFilter, clientsExpanded, setSearchParams]);
 
   const { data: hierarchy = [], isLoading } = useAssignedHierarchy();
   const allDevices = useMemo(() => flatDevicesFromHierarchy(hierarchy), [hierarchy]);
