@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock, Send, Calendar } from "lucide-react";
 import { useTenantSettings, useUpdateTenantSettings } from "@/hooks/useTenantSettings";
 import { useBackfillStatus, useRunBackfill } from "@/hooks/useBackfillHistory";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export default function Setup() {
@@ -21,6 +22,7 @@ export default function Setup() {
     connection_yellow_days: 14,
     alert_cooldown_days: 7,
     alert_max_window_days: 14,
+    alerts_check_hour: 9,
   });
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export default function Setup() {
         connection_yellow_days: settings.connection_yellow_days,
         alert_cooldown_days: settings.alert_cooldown_days,
         alert_max_window_days: settings.alert_max_window_days,
+        alerts_check_hour: settings.alerts_check_hour ?? 9,
       });
     }
   }, [settings]);
@@ -57,6 +60,7 @@ export default function Setup() {
         connection_yellow_days: form.connection_yellow_days,
         alert_cooldown_days: form.alert_cooldown_days,
         alert_max_window_days: form.alert_max_window_days,
+        alerts_check_hour: form.alerts_check_hour,
       });
       toast.success("Configuración guardada");
     } catch (e: any) {
