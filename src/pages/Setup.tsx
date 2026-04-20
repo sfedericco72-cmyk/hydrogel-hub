@@ -268,6 +268,8 @@ function AlertScheduleSection({ currentHour, onChangeHour }: { currentHour: numb
     </Section>
   );
 }
+
+function BackfillSection() {
   const { data: records = [], isLoading } = useBackfillStatus();
   const runBackfill = useRunBackfill();
   const [loadingPeriod, setLoadingPeriod] = useState<string | null>(null);
