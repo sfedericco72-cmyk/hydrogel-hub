@@ -142,6 +142,12 @@ export default function Setup() {
             </div>
           </Section>
 
+          {/* Horario y disparo de alertas */}
+          <AlertScheduleSection
+            currentHour={form.alerts_check_hour}
+            onChangeHour={v => handleChange("alerts_check_hour", v)}
+          />
+
           {/* Backfill */}
           <BackfillSection />
 
