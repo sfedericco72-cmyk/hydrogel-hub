@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX, Pause, AlertTriangle } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX, Pause, AlertTriangle, Mail } from "lucide-react";
+import { useAlertHistory } from "@/hooks/useAlertHistory";
+import { AlertHistoryTable } from "@/components/AlertHistoryTable";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PdVAlertSettings } from "@/components/PdVAlertSettings";
 import { GlobalAlertsPauseDialog } from "@/components/GlobalAlertsPauseDialog";
 import { UnassignedDevicesSection } from "@/components/UnassignedDevicesSection";
