@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX, Pause, AlertTriangle } from "lucide-react";
 import { PdVAlertSettings } from "@/components/PdVAlertSettings";
 import { GlobalAlertsPauseDialog } from "@/components/GlobalAlertsPauseDialog";
 import { UnassignedDevicesSection } from "@/components/UnassignedDevicesSection";
 import { UnassignDialog } from "@/components/UnassignDialog";
 import { ExportClientsButton } from "@/components/ExportClientsButton";
+import { AlertsStatusBadge } from "@/components/AlertsStatusBadge";
 import { useTenantSettings } from "@/hooks/useTenantSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,11 +31,16 @@ import {
   useUnassignDevice,
   useUnassignedDevices,
   useClientAssignmentCounts,
+  useAllPdvAlertSummaries,
+  type PdvAlertSummary,
 } from "@/hooks/useClients";
 import { useUserTenantId } from "@/hooks/useUserTenantId";
 import { ImportClientsDialog } from "@/components/ImportClientsDialog";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useAssignmentCuts } from "@/hooks/useAssignmentCuts";
+
+export type AlertFilter = "all" | "on" | "no_email" | "off";
+
 
 // ── Client Form Dialog ──────────────────────────────────
 
