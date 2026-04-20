@@ -981,15 +981,53 @@ export default function ClientsManager() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-6 space-y-4">
-        {/* Global search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar cliente, punto de venta o equipo (fixno, sucursal)..."
-            className="pl-9 h-10"
-          />
+        {/* Global pause banner */}
+        {isPaused && (
+          <div className="flex items-center gap-3 rounded-lg border border-status-warning/30 bg-status-warning/10 px-4 py-3 text-sm">
+            <Pause className="h-4 w-4 text-status-warning shrink-0" />
+            <div className="flex-1 text-status-warning">
+              Alertas pausadas hasta el <strong>{pausedUntilLabel}</strong>. Ningún cliente recibirá emails durante este período.
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setPauseOpen(true)}>
+              Gestionar
+            </Button>
+          </div>
+        )}
+
+        {/* Global search + alert filter chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar cliente, punto de venta o equipo (fixno, sucursal)..."
+              className="pl-9 h-10"
+            />
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+            {([
+              { key: "all", label: "Todos" },
+              { key: "on", label: "Con alertas", icon: Bell },
+              { key: "no_email", label: "Sin email", icon: AlertTriangle },
+              { key: "off", label: "OFF", icon: BellOff },
+            ] as const).map(({ key, label, icon: Ic }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setAlertFilter(key as AlertFilter)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                  alertFilter === key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                )}
+              >
+                {Ic && <Ic className="h-3 w-3" />}
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Unassigned devices section */}
@@ -1020,7 +1058,11 @@ export default function ClientsManager() {
             </CardContent>
           </Card>
         ) : filteredClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic px-2">Sin resultados para “{searchQuery}”</p>
+          <p className="text-sm text-muted-foreground italic px-2">
+            {searchQuery
+              ? `Sin resultados para “${searchQuery}”`
+              : "Ningún cliente coincide con el filtro de alertas."}
+          </p>
         ) : (
           <>
             <ClientGroup
@@ -1031,17 +1073,23 @@ export default function ClientsManager() {
               defaultOpen={true}
               searchQuery={searchQuery}
               matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={searchMatches.forceExpandClients}
+              forceExpandClients={effectiveForceExpand}
+              alertSummaries={alertData?.byClient}
+              globallyPaused={isPaused}
+              alertFilter={alertFilter}
             />
             <ClientGroup
               title="Sin equipos asignados"
               icon={UserX}
               clients={withoutDevices}
               tenantId={tenantId!}
-              defaultOpen={!!searchQuery}
+              defaultOpen={!!searchQuery || alertFilter !== "all"}
               searchQuery={searchQuery}
               matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={searchMatches.forceExpandClients}
+              forceExpandClients={effectiveForceExpand}
+              alertSummaries={alertData?.byClient}
+              globallyPaused={isPaused}
+              alertFilter={alertFilter}
             />
           </>
         )}
