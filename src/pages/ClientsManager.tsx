@@ -706,6 +706,8 @@ function ClientCard({
             </div>
           )}
 
+          <ClientAlertHistorySection clientId={client.id} />
+
           {pdvDialogOpen && (
             <PdVDialog
               open={pdvDialogOpen}
