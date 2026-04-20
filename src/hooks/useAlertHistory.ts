@@ -76,14 +76,11 @@ export function useAlertHistory(daysBack = 60) {
       });
       if (bccEmail) tenantEmails.add(bccEmail);
 
-      if (tenantEmails.size === 0) return [] as AlertHistoryEntry[];
-
       // Fetch logs filtered by template + recipient
       const { data: logs, error } = await supabase
         .from("email_send_log")
         .select("id, message_id, template_name, recipient_email, status, error_message, metadata, created_at")
         .in("template_name", ALERT_TEMPLATES)
-        .in("recipient_email", Array.from(tenantEmails))
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(1000);
@@ -100,23 +97,26 @@ export function useAlertHistory(daysBack = 60) {
         unique.push(row);
       }
 
-      // Enrich
+      // Enrich — prefer metadata enriched at send time (new alerts),
+      // fall back to email/message_id heuristics for legacy rows.
       const enriched: AlertHistoryEntry[] = unique.map(row => {
-        // Try to extract fixno from message_id (idempotency keys include fixno)
-        // Patterns: stock-bajo-{fixno}-YYYY-MM-DD, dispositivo-desconectado-{fixno}-YYYY-MM-DD,
-        // {tpl}-bcc-{fixno}-..., no-email-{stock|desconectado}-{fixno}-...
-        let fixno: string | null = null;
-        if (row.message_id) {
+        const md = (row.metadata ?? {}) as Record<string, any>;
+
+        // 1. fixno
+        let fixno: string | null = typeof md.fixno === 'string' ? md.fixno : null;
+        if (!fixno && row.message_id) {
           const m = row.message_id.match(/^(?:stock-bajo|dispositivo-desconectado)(?:-bcc)?-(.+?)-\d{4}-\d{2}-\d{2}$/)
             || row.message_id.match(/^no-email-(?:stock|desconectado)-(.+?)-\d{4}-\d{2}-\d{2}$/);
           if (m) fixno = m[1];
         }
 
-        let pdvId: string | null = null;
-        const recipientLower = row.recipient_email.toLowerCase().trim();
-        if (recipientLower !== bccEmail) {
-          // Email matches a PdV recipient
-          pdvId = pdvByEmail.get(recipientLower)?.id || null;
+        // 2. pdv_id — metadata first, then resolve via recipient email, then via fixno
+        let pdvId: string | null = typeof md.pdv_id === 'string' ? md.pdv_id : null;
+        if (!pdvId) {
+          const recipientLower = row.recipient_email.toLowerCase().trim();
+          if (recipientLower !== bccEmail) {
+            pdvId = pdvByEmail.get(recipientLower)?.id || null;
+          }
         }
         if (!pdvId && fixno) {
           pdvId = pdvIdByFixno.get(fixno) || null;
