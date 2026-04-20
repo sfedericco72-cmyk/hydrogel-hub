@@ -229,9 +229,20 @@ async function trySendAlert(
   cooldownDays: number,
   bccEmail: string | null,
   templateData: Record<string, any>,
+  tenantId: string,
 ): Promise<{ sent: boolean; template: string }> {
   const cooldownAgo = new Date(now - cooldownDays * 24 * 60 * 60 * 1000).toISOString()
   const today = new Date().toISOString().slice(0, 10)
+
+  // Shared metadata so the history view can resolve client/PdV/equipo without
+  // depending on recipient_email matching (critical for email-no-configurado
+  // which is sent only to the BCC monitoring address).
+  const baseMetadata = {
+    tenant_id: tenantId,
+    pdv_id: pdv.id,
+    fixno: device.fixno,
+    alert_type: templateName,
+  }
 
   if (!hasAlertEmail) {
     if (!bccEmail) return { sent: false, template: templateName }
@@ -258,6 +269,7 @@ async function trySendAlert(
           customerName: device.customer_name,
           alertType: templateName === 'stock-bajo' ? 'stock bajo' : 'equipo desconectado',
         },
+        metadata: { ...baseMetadata, alert_type: 'email-no-configurado' },
       },
     })
 
@@ -278,15 +290,18 @@ async function trySendAlert(
 
   if (recentAlert?.length) return { sent: false, template: templateName }
 
+  // Primary send to PdV — logged with enriched metadata
   await supabase.functions.invoke('send-transactional-email', {
     body: {
       templateName,
       recipientEmail,
       idempotencyKey: `${templateName}-${device.fixno}-${today}`,
       templateData,
+      metadata: baseMetadata,
     },
   })
 
+  // BCC copy — sent for monitoring but NOT logged (one alert = one history row)
   if (bccEmail) {
     await supabase.functions.invoke('send-transactional-email', {
       body: {
@@ -294,6 +309,8 @@ async function trySendAlert(
         recipientEmail: bccEmail,
         idempotencyKey: `${templateName}-bcc-${device.fixno}-${today}`,
         templateData,
+        metadata: baseMetadata,
+        skipLog: true,
       },
     })
   }
