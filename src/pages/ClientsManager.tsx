@@ -889,10 +889,25 @@ export default function ClientsManager() {
     return () => { cancelled = true; };
   }, [searchQuery, clients]);
 
+  // Filter by alert config: only show clients that have at least one PdV matching the chosen filter.
+  const alertFilteredClients = useMemo(() => {
+    if (alertFilter === "all") return clients;
+    const summaries = alertData?.byClient;
+    if (!summaries) return clients;
+    return clients.filter((c) => {
+      const s = summaries.get(c.id);
+      if (!s) return false;
+      if (alertFilter === "on") return s.on_with_email > 0;
+      if (alertFilter === "no_email") return s.on_no_email > 0;
+      if (alertFilter === "off") return s.off > 0;
+      return true;
+    });
+  }, [clients, alertFilter, alertData]);
+
   const filteredClients = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return clients;
-    return clients.filter((c) => {
+    if (!q) return alertFilteredClients;
+    return alertFilteredClients.filter((c) => {
       const directHit =
         c.name?.toLowerCase().includes(q) ||
         c.code?.toLowerCase().includes(q) ||
@@ -902,7 +917,15 @@ export default function ClientsManager() {
       const childHit = searchMatches.forceExpandClients.has(c.id);
       return directHit || childHit;
     });
-  }, [clients, searchQuery, searchMatches]);
+  }, [alertFilteredClients, searchQuery, searchMatches]);
+
+  // When alert filter is active, force-expand matching clients so the user sees the matching PdV.
+  const effectiveForceExpand = useMemo(() => {
+    if (alertFilter === "all") return searchMatches.forceExpandClients;
+    const set = new Set(searchMatches.forceExpandClients);
+    filteredClients.forEach((c) => set.add(c.id));
+    return set;
+  }, [searchMatches.forceExpandClients, filteredClients, alertFilter]);
 
   const { withDevices, withoutDevices } = useMemo(() => {
     const counts = assignmentCounts || new Map();
