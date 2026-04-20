@@ -60,7 +60,6 @@ export function AlertHistoryTable({ entries, isLoading, showClient = true, pageS
               {showClient && <th className="px-3 py-2 text-left font-medium">Cliente</th>}
               <th className="px-3 py-2 text-left font-medium">PdV</th>
               <th className="px-3 py-2 text-left font-medium">Equipo</th>
-              <th className="px-3 py-2 text-left font-medium">Destinatario</th>
               <th className="px-3 py-2 text-left font-medium">Estado</th>
             </tr>
           </thead>
@@ -90,9 +89,6 @@ export function AlertHistoryTable({ entries, isLoading, showClient = true, pageS
                   )}
                   <td className="px-3 py-2 text-xs">{entry.pdv_name ?? <span className="text-muted-foreground italic">—</span>}</td>
                   <td className="px-3 py-2 text-xs font-mono">{entry.fixno ?? <span className="text-muted-foreground italic font-sans">—</span>}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground max-w-[180px] truncate" title={entry.recipient_email}>
-                    {entry.recipient_email}
-                  </td>
                   <td className="px-3 py-2">
                     <div className={cn("inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs", status.className)}>
                       <StatusIcon className="h-3 w-3" />
