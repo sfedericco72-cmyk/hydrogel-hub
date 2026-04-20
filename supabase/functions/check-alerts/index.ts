@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
           remainingCuts: remaining,
           estimatedDays,
           customerName: device.customer_name,
-        })
+        }, tenantId)
         if (counted.sent) {
           if (counted.template === 'email-no-configurado') totals['email-no-configurado']++
           else totals['stock-bajo']++
@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
           fixno: device.fixno,
           daysSinceOnline,
           customerName: device.customer_name,
-        })
+        }, tenantId)
         if (counted.sent) {
           if (counted.template === 'email-no-configurado') totals['email-no-configurado']++
           else totals['dispositivo-desconectado']++
