@@ -794,16 +794,26 @@ export default function ClientsManager() {
   const { data: settings } = useTenantSettings();
   const { data: assignmentCounts } = useClientAssignmentCounts();
   const { data: unassignedDevices = [] } = useUnassignedDevices();
+  const { data: alertData } = useAllPdvAlertSummaries();
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
   const [assignFromUnassigned, setAssignFromUnassigned] = useState<{ deviceId: string } | null>(null);
   const [pickPdvOpen, setPickPdvOpen] = useState(false);
 
   const isPaused = settings?.alerts_paused_until
     ? new Date(settings.alerts_paused_until).getTime() > Date.now()
     : false;
+
+  const pausedUntilLabel = settings?.alerts_paused_until
+    ? new Date(settings.alerts_paused_until).toLocaleDateString("es-CL", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
 
   // Search-driven expansion data: which PdV / clients to auto-expand
   const [searchMatches, setSearchMatches] = useState<{
