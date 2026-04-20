@@ -760,6 +760,40 @@ function ClientAlertHistorySection({ clientId }: { clientId: string }) {
   );
 }
 
+// ── Global Alert History (tab content) ──────────────────
+function GlobalAlertHistory() {
+  const [daysBack, setDaysBack] = useState(30);
+  const { data: history = [], isLoading } = useAlertHistory(daysBack);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-sm text-muted-foreground">
+          Alertas enviadas a tus puntos de venta. Se muestra el último estado de cada email.
+        </p>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+          {[7, 30, 60].map(d => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDaysBack(d)}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                daysBack === d
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent",
+              )}
+            >
+              {d} días
+            </button>
+          ))}
+        </div>
+      </div>
+      <AlertHistoryTable entries={history} isLoading={isLoading} showClient={true} />
+    </div>
+  );
+}
+
 function ClientGroup({
   title,
   icon: Icon,
