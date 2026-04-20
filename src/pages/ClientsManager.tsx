@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
-import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX, Pause, AlertTriangle } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2, MapPin, ChevronDown, ChevronRight, Cpu, ArrowLeft, Unplug, Upload, History, Calendar, Search, BellOff, Bell, Users, UserX, Pause, AlertTriangle, Mail } from "lucide-react";
+import { useAlertHistory } from "@/hooks/useAlertHistory";
+import { AlertHistoryTable } from "@/components/AlertHistoryTable";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PdVAlertSettings } from "@/components/PdVAlertSettings";
 import { GlobalAlertsPauseDialog } from "@/components/GlobalAlertsPauseDialog";
 import { UnassignedDevicesSection } from "@/components/UnassignedDevicesSection";
@@ -703,6 +706,8 @@ function ClientCard({
             </div>
           )}
 
+          <ClientAlertHistorySection clientId={client.id} />
+
           {pdvDialogOpen && (
             <PdVDialog
               open={pdvDialogOpen}
@@ -722,8 +727,72 @@ function ClientCard({
   );
 }
 
+// ── Per-Client Alert History (collapsible) ────────────
+function ClientAlertHistorySection({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
+  const { data: history = [], isLoading } = useAlertHistory(60);
+  const filtered = useMemo(() => history.filter(h => h.client_id === clientId), [history, clientId]);
 
-// ── Group Section ───────────────────────────────────────
+  return (
+    <div className="border-t border-border pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        <Mail className="w-3.5 h-3.5" />
+        <span className="uppercase tracking-wide">Historial de alertas</span>
+        <Badge variant="secondary" className="text-[10px]">{filtered.length}</Badge>
+      </button>
+      {open && (
+        <div className="mt-2">
+          <AlertHistoryTable
+            entries={filtered}
+            isLoading={isLoading}
+            showClient={false}
+            pageSize={20}
+            emptyMessage="Este cliente no tiene alertas enviadas en los últimos 60 días."
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Global Alert History (tab content) ──────────────────
+function GlobalAlertHistory() {
+  const [daysBack, setDaysBack] = useState(30);
+  const { data: history = [], isLoading } = useAlertHistory(daysBack);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-sm text-muted-foreground">
+          Alertas enviadas a tus puntos de venta. Se muestra el último estado de cada email.
+        </p>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+          {[7, 30, 60].map(d => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDaysBack(d)}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                daysBack === d
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent",
+              )}
+            >
+              {d} días
+            </button>
+          ))}
+        </div>
+      </div>
+      <AlertHistoryTable entries={history} isLoading={isLoading} showClient={true} />
+    </div>
+  );
+}
 
 function ClientGroup({
   title,
@@ -1040,60 +1109,73 @@ export default function ClientsManager() {
           />
         )}
 
-        {isLoading ? (
-          <p className="text-muted-foreground">Cargando...</p>
-        ) : clients.length === 0 ? (
-          <Card className="bg-card border-border">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Sin clientes</h2>
-              <p className="text-sm text-muted-foreground mb-4">Creá tu primer cliente o importalos desde un archivo CSV/Excel.</p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setImportOpen(true)}>
-                  <Upload className="w-4 h-4 mr-2" /> Importar
-                </Button>
-                <Button onClick={() => setCreateOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" /> Crear primer cliente
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : filteredClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic px-2">
-            {searchQuery
-              ? `Sin resultados para “${searchQuery}”`
-              : "Ningún cliente coincide con el filtro de alertas."}
-          </p>
-        ) : (
-          <>
-            <ClientGroup
-              title="Con equipos asignados"
-              icon={Users}
-              clients={withDevices}
-              tenantId={tenantId!}
-              defaultOpen={true}
-              searchQuery={searchQuery}
-              matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={effectiveForceExpand}
-              alertSummaries={alertData?.byClient}
-              globallyPaused={isPaused}
-              alertFilter={alertFilter}
-            />
-            <ClientGroup
-              title="Sin equipos asignados"
-              icon={UserX}
-              clients={withoutDevices}
-              tenantId={tenantId!}
-              defaultOpen={!!searchQuery || alertFilter !== "all"}
-              searchQuery={searchQuery}
-              matchedPdvByClient={searchMatches.matchedPdvByClient}
-              forceExpandClients={effectiveForceExpand}
-              alertSummaries={alertData?.byClient}
-              globallyPaused={isPaused}
-              alertFilter={alertFilter}
-            />
-          </>
-        )}
+        <Tabs defaultValue="clientes" className="w-full">
+          <TabsList>
+            <TabsTrigger value="clientes"><Building2 className="w-4 h-4 mr-1.5" />Clientes</TabsTrigger>
+            <TabsTrigger value="alertas"><Mail className="w-4 h-4 mr-1.5" />Historial de alertas</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="clientes" className="space-y-4 mt-4">
+            {isLoading ? (
+              <p className="text-muted-foreground">Cargando...</p>
+            ) : clients.length === 0 ? (
+              <Card className="bg-card border-border">
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <Building2 className="w-12 h-12 text-muted-foreground mb-4" />
+                  <h2 className="text-lg font-semibold mb-2">Sin clientes</h2>
+                  <p className="text-sm text-muted-foreground mb-4">Creá tu primer cliente o importalos desde un archivo CSV/Excel.</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setImportOpen(true)}>
+                      <Upload className="w-4 h-4 mr-2" /> Importar
+                    </Button>
+                    <Button onClick={() => setCreateOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" /> Crear primer cliente
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : filteredClients.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic px-2">
+                {searchQuery
+                  ? `Sin resultados para “${searchQuery}”`
+                  : "Ningún cliente coincide con el filtro de alertas."}
+              </p>
+            ) : (
+              <>
+                <ClientGroup
+                  title="Con equipos asignados"
+                  icon={Users}
+                  clients={withDevices}
+                  tenantId={tenantId!}
+                  defaultOpen={true}
+                  searchQuery={searchQuery}
+                  matchedPdvByClient={searchMatches.matchedPdvByClient}
+                  forceExpandClients={effectiveForceExpand}
+                  alertSummaries={alertData?.byClient}
+                  globallyPaused={isPaused}
+                  alertFilter={alertFilter}
+                />
+                <ClientGroup
+                  title="Sin equipos asignados"
+                  icon={UserX}
+                  clients={withoutDevices}
+                  tenantId={tenantId!}
+                  defaultOpen={!!searchQuery || alertFilter !== "all"}
+                  searchQuery={searchQuery}
+                  matchedPdvByClient={searchMatches.matchedPdvByClient}
+                  forceExpandClients={effectiveForceExpand}
+                  alertSummaries={alertData?.byClient}
+                  globallyPaused={isPaused}
+                  alertFilter={alertFilter}
+                />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="alertas" className="mt-4">
+            <GlobalAlertHistory />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {createOpen && tenantId && (

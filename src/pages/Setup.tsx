@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock, Send, Calendar } from "lucide-react";
 import { useTenantSettings, useUpdateTenantSettings } from "@/hooks/useTenantSettings";
 import { useBackfillStatus, useRunBackfill } from "@/hooks/useBackfillHistory";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export default function Setup() {
@@ -21,6 +22,7 @@ export default function Setup() {
     connection_yellow_days: 14,
     alert_cooldown_days: 7,
     alert_max_window_days: 14,
+    alerts_check_hour: 9,
   });
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export default function Setup() {
         connection_yellow_days: settings.connection_yellow_days,
         alert_cooldown_days: settings.alert_cooldown_days,
         alert_max_window_days: settings.alert_max_window_days,
+        alerts_check_hour: settings.alerts_check_hour ?? 9,
       });
     }
   }, [settings]);
@@ -57,6 +60,7 @@ export default function Setup() {
         connection_yellow_days: form.connection_yellow_days,
         alert_cooldown_days: form.alert_cooldown_days,
         alert_max_window_days: form.alert_max_window_days,
+        alerts_check_hour: form.alerts_check_hour,
       });
       toast.success("Configuración guardada");
     } catch (e: any) {
@@ -138,6 +142,12 @@ export default function Setup() {
             </div>
           </Section>
 
+          {/* Horario y disparo de alertas */}
+          <AlertScheduleSection
+            currentHour={form.alerts_check_hour}
+            onChangeHour={v => handleChange("alerts_check_hour", v)}
+          />
+
           {/* Backfill */}
           <BackfillSection />
 
@@ -186,6 +196,76 @@ function NumberField({ label, value, onChange, min, max, color }: { label: strin
         className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       />
     </div>
+  );
+}
+
+function AlertScheduleSection({ currentHour, onChangeHour }: { currentHour: number; onChangeHour: (v: number) => void }) {
+  const [triggering, setTriggering] = useState(false);
+
+  async function handleTrigger() {
+    setTriggering(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-alerts", {
+        body: { force: true },
+      });
+      if (error) throw error;
+      const totals = data?.by_template ?? {};
+      const total = data?.alerts_sent ?? 0;
+      if (total === 0) {
+        toast.success("Disparado: no había alertas pendientes para enviar");
+      } else {
+        const parts: string[] = [];
+        if (totals["stock-bajo"]) parts.push(`${totals["stock-bajo"]} stock bajo`);
+        if (totals["dispositivo-desconectado"]) parts.push(`${totals["dispositivo-desconectado"]} desconectado`);
+        if (totals["email-no-configurado"]) parts.push(`${totals["email-no-configurado"]} sin email`);
+        toast.success(`${total} alerta${total !== 1 ? "s" : ""} encolada${total !== 1 ? "s" : ""}: ${parts.join(", ")}`);
+      }
+    } catch (e: any) {
+      toast.error("Error al disparar alertas: " + (e.message || e));
+    } finally {
+      setTriggering(false);
+    }
+  }
+
+  return (
+    <Section icon={<Calendar className="h-4 w-4" />} title="Horario y Disparo de Alertas">
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">Hora del día (zona horaria Chile)</label>
+          <select
+            value={currentHour}
+            onChange={e => onChangeHour(parseInt(e.target.value, 10))}
+            className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {Array.from({ length: 24 }).map((_, h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, "0")}:00
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            El sistema evalúa alertas cada hora; solo se procesan los tenants cuya hora configurada coincide con la hora actual de Chile (America/Santiago).
+            Recordá guardar los cambios.
+          </p>
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <p className="mb-2 text-sm font-medium">Disparo manual</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Forzá la evaluación de alertas ahora mismo, ignorando el horario configurado.
+            Respeta cooldown, pausa global, y configuración por PdV.
+          </p>
+          <button
+            onClick={handleTrigger}
+            disabled={triggering}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {triggering ? "Disparando..." : "Disparar alertas ahora"}
+          </button>
+        </div>
+      </div>
+    </Section>
   );
 }
 
