@@ -276,6 +276,8 @@ async function trySendAlert(
           fixno: device.fixno,
           customerName: device.customer_name,
           alertType: templateName === 'stock-bajo' ? 'stock bajo' : 'equipo desconectado',
+          brandName: templateData.brandName,
+          logoUrl: templateData.logoUrl,
         },
         metadata: { ...baseMetadata, alert_type: 'email-no-configurado' },
       },
