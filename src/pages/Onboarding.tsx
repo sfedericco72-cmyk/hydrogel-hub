@@ -192,8 +192,98 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 1: CutABC Credentials */}
+          {/* Step 1: Marca y comunicación */}
           {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold">Marca y comunicación</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Personalizá los emails que reciben tus clientes finales. Todo es opcional — podés editarlo después.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">URL del logo</label>
+                  <input
+                    type="url"
+                    value={form.logo_url}
+                    onChange={e => handleChange("logo_url", e.target.value)}
+                    placeholder="https://miempresa.com/logo.png"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {form.logo_url && (
+                    <div className="mt-2 rounded-lg border bg-white p-3 flex items-center justify-center">
+                      <img src={form.logo_url} alt="Logo preview" className="h-10 max-w-[200px] object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    </div>
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">Si lo dejás vacío no se muestra logo en los emails.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Nombre de marca para emails</label>
+                  <input
+                    type="text"
+                    value={form.brand_name}
+                    onChange={e => handleChange("brand_name", e.target.value)}
+                    placeholder={form.company_name || "Mi Empresa"}
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Aparece como remitente y firma. Por defecto se usa el nombre de la empresa.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">URL de tu tienda online</label>
+                  <input
+                    type="url"
+                    value={form.store_url}
+                    onChange={e => handleChange("store_url", e.target.value)}
+                    placeholder="https://miempresa.com/tienda"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Aparece como botón "Comprar" en alertas de stock bajo. Si lo dejás vacío, el botón no se muestra.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Texto del botón</label>
+                  <input
+                    type="text"
+                    value={form.store_button_label}
+                    onChange={e => handleChange("store_button_label", e.target.value)}
+                    placeholder="Comprar insumos"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Email de soporte para tus clientes</label>
+                  <input
+                    type="email"
+                    value={form.support_email}
+                    onChange={e => handleChange("support_email", e.target.value)}
+                    placeholder="soporte@miempresa.com"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Aparece en el pie de los emails. Si lo dejás vacío, se sugiere "contacte a su ejecutivo comercial".</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Zona horaria</label>
+                  <select
+                    value={form.timezone}
+                    onChange={e => handleChange("timezone", e.target.value)}
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {TIMEZONES.map(tz => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">Las alertas se disparan en esta hora local.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: CutABC Credentials */}
+          {step === 2 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-bold">Credenciales CutABC</h2>
