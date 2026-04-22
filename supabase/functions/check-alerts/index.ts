@@ -8,14 +8,12 @@ const DEFAULT_COOLDOWN_DAYS = 7
 const DEFAULT_MAX_WINDOW_DAYS = 14
 const DEFAULT_CHECK_HOUR = 9 // 9 AM tenant local time
 
-// Tenant timezone — currently fixed for Chile.
-// TODO: when supporting tenants in other timezones, store IANA tz on tenant_settings.
-const TENANT_TZ = 'America/Santiago'
+// Default tenant timezone — overridden per tenant from tenant_settings.timezone
+const DEFAULT_TENANT_TZ = 'America/Santiago'
 
-function getTenantHour(): number {
-  // Get current hour in tenant timezone using Intl
+function getTenantHour(tz: string): number {
   const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: TENANT_TZ,
+    timeZone: tz,
     hour: 'numeric',
     hour12: false,
   })
@@ -46,7 +44,7 @@ Deno.serve(async (req) => {
   // Load all tenant settings
   const { data: allSettings, error: tsErr } = await supabase
     .from('tenant_settings')
-    .select('tenant_id, bcc_email, low_stock_days, alert_cooldown_days, alert_max_window_days, alerts_paused_until, alerts_check_hour')
+    .select('tenant_id, bcc_email, low_stock_days, alert_cooldown_days, alert_max_window_days, alerts_paused_until, alerts_check_hour, brand_name, logo_url, store_url, store_button_label, support_email, timezone, company_name')
     .not('tenant_id', 'is', null)
 
   if (tsErr) {
@@ -54,7 +52,6 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Failed to load tenant settings' }), { status: 500 })
   }
 
-  const currentTenantHour = getTenantHour()
   const totals = {
     'stock-bajo': 0,
     'dispositivo-desconectado': 0,
@@ -67,10 +64,12 @@ Deno.serve(async (req) => {
   for (const settings of (allSettings || [])) {
     const tenantId = settings.tenant_id
     const tenantCheckHour = settings.alerts_check_hour ?? DEFAULT_CHECK_HOUR
+    const tenantTz = (settings as any).timezone || DEFAULT_TENANT_TZ
+    const currentTenantHour = getTenantHour(tenantTz)
 
     // Skip tenants whose configured hour doesn't match current hour (unless forced)
     if (!force && tenantCheckHour !== currentTenantHour) {
-      tenantsSkipped.push({ tenant_id: tenantId, reason: `wrong hour (configured: ${tenantCheckHour}, current: ${currentTenantHour})` })
+      tenantsSkipped.push({ tenant_id: tenantId, reason: `wrong hour (configured: ${tenantCheckHour}, current: ${currentTenantHour} ${tenantTz})` })
       continue
     }
 
@@ -78,6 +77,15 @@ Deno.serve(async (req) => {
     const LOW_STOCK_DAYS_THRESHOLD = settings.low_stock_days ?? DEFAULT_LOW_STOCK_DAYS
     const ALERT_COOLDOWN_DAYS = settings.alert_cooldown_days ?? DEFAULT_COOLDOWN_DAYS
     const ALERT_MAX_WINDOW_DAYS = settings.alert_max_window_days ?? DEFAULT_MAX_WINDOW_DAYS
+
+    // Branding props injected into every templateData for this tenant
+    const brandingProps = {
+      brandName: (settings as any).brand_name || (settings as any).company_name || null,
+      logoUrl: (settings as any).logo_url || null,
+      storeUrl: (settings as any).store_url || null,
+      storeButtonLabel: (settings as any).store_button_label || null,
+      supportEmail: (settings as any).support_email || null,
+    }
 
     // Respect global pause
     if (settings.alerts_paused_until) {
@@ -171,6 +179,7 @@ Deno.serve(async (req) => {
           remainingCuts: remaining,
           estimatedDays,
           customerName: device.customer_name,
+          ...brandingProps,
         }, tenantId)
         if (counted.sent) {
           if (counted.template === 'email-no-configurado') totals['email-no-configurado']++
@@ -192,6 +201,7 @@ Deno.serve(async (req) => {
           fixno: device.fixno,
           daysSinceOnline,
           customerName: device.customer_name,
+          ...brandingProps,
         }, tenantId)
         if (counted.sent) {
           if (counted.template === 'email-no-configurado') totals['email-no-configurado']++
@@ -206,8 +216,6 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({
     success: true,
     forced: force,
-    current_tenant_hour: currentTenantHour,
-    timezone: TENANT_TZ,
     tenants_processed: tenantsProcessed.length,
     tenants_skipped: tenantsSkipped.length,
     skipped_detail: tenantsSkipped,
