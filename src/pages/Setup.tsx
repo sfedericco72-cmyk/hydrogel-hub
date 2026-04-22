@@ -138,6 +138,34 @@ export default function Setup() {
             <Field label="Email BCC para alertas" value={form.bcc_email} onChange={v => handleChange("bcc_email", v)} placeholder="nombre@empresa.com" />
           </Section>
 
+          {/* Marca y comunicación */}
+          <Section icon={<Palette className="h-4 w-4" />} title="Marca y comunicación">
+            <p className="text-xs text-muted-foreground mb-3">Personalizá los emails que reciben tus clientes finales.</p>
+            <Field label="URL del logo" value={form.logo_url} onChange={v => handleChange("logo_url", v)} placeholder="https://miempresa.com/logo.png" />
+            {form.logo_url && (
+              <div className="mb-3 rounded-lg border bg-white p-3 flex items-center justify-center">
+                <img src={form.logo_url} alt="Logo" className="h-10 max-w-[200px] object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              </div>
+            )}
+            <Field label="Nombre de marca para emails" value={form.brand_name} onChange={v => handleChange("brand_name", v)} placeholder={form.company_name || "Mi Empresa"} />
+            <Field label="URL de tu tienda online (botón Comprar)" value={form.store_url} onChange={v => handleChange("store_url", v)} placeholder="https://miempresa.com/tienda" />
+            <Field label="Texto del botón Comprar" value={form.store_button_label} onChange={v => handleChange("store_button_label", v)} placeholder="Comprar insumos" />
+            <Field label="Email de soporte para tus clientes" value={form.support_email} onChange={v => handleChange("support_email", v)} placeholder="soporte@miempresa.com" />
+            <div className="mb-3">
+              <label className="mb-1 block text-sm font-medium">Zona horaria</label>
+              <select
+                value={form.timezone}
+                onChange={e => handleChange("timezone", e.target.value)}
+                className="w-full rounded-lg border border-input bg-secondary px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {TIMEZONES.map(tz => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">Las alertas se disparan en esta hora local.</p>
+            </div>
+          </Section>
+
           {/* Attach Rate */}
           <Section icon={<TrendingUp className="h-4 w-4" />} title="Attach Rate">
             <p className="text-xs text-muted-foreground mb-3">Umbrales para los colores del indicador de attach rate (láminas cortadas / equipos vendidos)</p>
