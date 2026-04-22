@@ -363,8 +363,8 @@ export default function BranchDetail() {
                   {transactions.map((tx) => (
                     <tr key={tx.id} className="border-b border-border/50 last:border-0">
                       <td className="py-2 pr-4 whitespace-nowrap">
-                        {tx.bill_date
-                          ? new Date(tx.bill_date).toLocaleDateString("es-CL", {
+                        {tx.audit_date
+                          ? new Date(tx.audit_date).toLocaleDateString("es-CL", {
                               day: "2-digit",
                               month: "short",
                               year: "numeric",
@@ -389,7 +389,7 @@ export default function BranchDetail() {
                         {tx.bill_no}
                       </td>
                       <td className="py-2 text-xs text-muted-foreground truncate max-w-[120px]">
-                        {tx.remark || "—"}
+                        {tx.summary || tx.remark || "—"}
                       </td>
                     </tr>
                   ))}
