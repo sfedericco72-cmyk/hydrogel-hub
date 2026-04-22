@@ -648,6 +648,7 @@ export type Database = {
           attach_rate_green: number
           attach_rate_yellow: number
           bcc_email: string | null
+          brand_name: string | null
           company_name: string
           connection_green_days: number
           connection_yellow_days: number
@@ -659,8 +660,12 @@ export type Database = {
           id: string
           logo_url: string | null
           low_stock_days: number
+          store_button_label: string | null
+          store_url: string | null
+          support_email: string | null
           tenant_id: string | null
           tenant_name: string
+          timezone: string
           updated_at: string
         }
         Insert: {
@@ -671,6 +676,7 @@ export type Database = {
           attach_rate_green?: number
           attach_rate_yellow?: number
           bcc_email?: string | null
+          brand_name?: string | null
           company_name?: string
           connection_green_days?: number
           connection_yellow_days?: number
@@ -682,8 +688,12 @@ export type Database = {
           id?: string
           logo_url?: string | null
           low_stock_days?: number
+          store_button_label?: string | null
+          store_url?: string | null
+          support_email?: string | null
           tenant_id?: string | null
           tenant_name?: string
+          timezone?: string
           updated_at?: string
         }
         Update: {
@@ -694,6 +704,7 @@ export type Database = {
           attach_rate_green?: number
           attach_rate_yellow?: number
           bcc_email?: string | null
+          brand_name?: string | null
           company_name?: string
           connection_green_days?: number
           connection_yellow_days?: number
@@ -705,8 +716,12 @@ export type Database = {
           id?: string
           logo_url?: string | null
           low_stock_days?: number
+          store_button_label?: string | null
+          store_url?: string | null
+          support_email?: string | null
           tenant_id?: string | null
           tenant_name?: string
+          timezone?: string
           updated_at?: string
         }
         Relationships: [
@@ -802,16 +817,33 @@ export type Database = {
           read_ct: number
         }[]
       }
-      setup_new_tenant: {
-        Args: {
-          _bcc_email?: string
-          _company_name: string
-          _cutabc_company_no?: string
-          _cutabc_password?: string
-          _cutabc_username?: string
-        }
-        Returns: string
-      }
+      setup_new_tenant:
+        | {
+            Args: {
+              _bcc_email?: string
+              _company_name: string
+              _cutabc_company_no?: string
+              _cutabc_password?: string
+              _cutabc_username?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              _bcc_email?: string
+              _brand_name?: string
+              _company_name: string
+              _cutabc_company_no?: string
+              _cutabc_password?: string
+              _cutabc_username?: string
+              _logo_url?: string
+              _store_button_label?: string
+              _store_url?: string
+              _support_email?: string
+              _timezone?: string
+            }
+            Returns: string
+          }
     }
     Enums: {
       app_role: "admin"

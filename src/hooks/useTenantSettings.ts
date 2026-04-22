@@ -8,6 +8,11 @@ export interface TenantSettings {
   company_name: string;
   logo_url: string | null;
   bcc_email: string | null;
+  brand_name: string | null;
+  store_url: string | null;
+  store_button_label: string | null;
+  support_email: string | null;
+  timezone: string;
   attach_rate_green: number;
   attach_rate_yellow: number;
   low_stock_days: number;

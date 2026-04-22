@@ -4,25 +4,44 @@ import {
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const SITE_NAME = "Bitec Hydrogel Hub"
-const LOGO_URL = "https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png"
+const DEFAULT_SITE_NAME = "CutMonitor"
 
 interface StockBajoProps {
   branchName?: string
   fixno?: string
   remainingCuts?: number
   estimatedDays?: number
+  brandName?: string
+  logoUrl?: string
+  storeUrl?: string
+  storeButtonLabel?: string
+  supportEmail?: string
 }
 
-const StockBajoEmail = ({ branchName, fixno, remainingCuts, estimatedDays }: StockBajoProps) => (
+const StockBajoEmail = ({
+  branchName,
+  fixno,
+  remainingCuts,
+  estimatedDays,
+  brandName,
+  logoUrl,
+  storeUrl,
+  storeButtonLabel,
+  supportEmail,
+}: StockBajoProps) => {
+  const siteName = brandName || DEFAULT_SITE_NAME
+  const buttonLabel = storeButtonLabel || 'Comprar insumos'
+  return (
   <Html lang="es" dir="ltr">
     <Head />
     <Preview>⚠️ Stock bajo en {branchName || 'un equipo'} — quedan {remainingCuts ?? '?'} cortes</Preview>
     <Body style={main}>
       <Container style={container}>
+        {logoUrl ? (
         <Section style={headerSection}>
-          <Img src={LOGO_URL} alt="Bitec" width="120" height="40" style={logo} />
+            <Img src={logoUrl} alt={siteName} width="120" height="40" style={logo} />
         </Section>
+        ) : null}
 
         <Heading style={h1}>⚠️ Alerta de Stock Bajo</Heading>
         <Text style={text}>
@@ -45,27 +64,41 @@ const StockBajoEmail = ({ branchName, fixno, remainingCuts, estimatedDays }: Sto
           Recomendamos reponer insumos a la brevedad para evitar interrupciones en el servicio.
         </Text>
 
+        {storeUrl ? (
         <Section style={{ textAlign: 'center' as const, margin: '30px 0' }}>
-          <Button style={button} href="https://bitec.cl/tienda/">
-            Comprar insumos en bitec.cl
+            <Button style={button} href={storeUrl}>
+              {buttonLabel}
           </Button>
         </Section>
+        ) : null}
 
         <Hr style={hr} />
         <Text style={footer}>
-          Este es un mensaje automático de {SITE_NAME}. Si tiene consultas, contacte a su ejecutivo comercial.
+          Este es un mensaje automático de {siteName}.
+          {supportEmail ? <> Si tiene consultas, escríbanos a <a href={`mailto:${supportEmail}`} style={footerLink}>{supportEmail}</a>.</> : ' Si tiene consultas, contacte a su ejecutivo comercial.'}
         </Text>
       </Container>
     </Body>
   </Html>
-)
+  )
+}
 
 export const template = {
   component: StockBajoEmail,
   subject: (data: Record<string, any>) =>
     `⚠️ Stock bajo: ${data.branchName || data.fixno || 'equipo'} — ${data.remainingCuts ?? '?'} cortes restantes`,
   displayName: 'Alerta de stock bajo',
-  previewData: { branchName: 'Sucursal Centro', fixno: 'FX-1234', remainingCuts: 8, estimatedDays: 3 },
+  previewData: {
+    branchName: 'Sucursal Centro',
+    fixno: 'FX-1234',
+    remainingCuts: 8,
+    estimatedDays: 3,
+    brandName: 'Bitec Hydrogel Hub',
+    logoUrl: 'https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png',
+    storeUrl: 'https://bitec.cl/tienda/',
+    storeButtonLabel: 'Comprar insumos en bitec.cl',
+    supportEmail: 'santiago.federico@bitec.cl',
+  },
 } satisfies TemplateEntry
 
 const main = { backgroundColor: '#ffffff', fontFamily: "'DM Sans', Arial, sans-serif" }
@@ -94,3 +127,4 @@ const button = {
 }
 const hr = { borderColor: '#e5e7eb', margin: '30px 0' }
 const footer = { fontSize: '12px', color: '#9ca3af', margin: '0', lineHeight: '1.5' }
+const footerLink = { color: '#0ea5e9', textDecoration: 'none' }

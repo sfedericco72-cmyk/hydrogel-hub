@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
   let templateData: Record<string, any> = {}
   let metadata: Record<string, any> | null = null
   let skipLog = false
+  let brandNameOverride: string | null = null
   try {
     const body = await req.json()
     templateName = body.templateName || body.template_name
@@ -70,6 +71,9 @@ Deno.serve(async (req) => {
     idempotencyKey = body.idempotencyKey || body.idempotency_key || messageId
     if (body.templateData && typeof body.templateData === 'object') {
       templateData = body.templateData
+      if (typeof body.templateData.brandName === 'string' && body.templateData.brandName.trim()) {
+        brandNameOverride = body.templateData.brandName.trim()
+      }
     }
     if (body.metadata && typeof body.metadata === 'object') {
       metadata = body.metadata
@@ -319,12 +323,14 @@ Deno.serve(async (req) => {
     })
   }
 
+  const fromName = brandNameOverride || SITE_NAME
+
   const { error: enqueueError } = await supabase.rpc('enqueue_email', {
     queue_name: 'transactional_emails',
     payload: {
       message_id: messageId,
       to: effectiveRecipient,
-      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      from: `${fromName} <noreply@${FROM_DOMAIN}>`,
       sender_domain: SENDER_DOMAIN,
       subject: resolvedSubject,
       html,

@@ -1,13 +1,24 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, Key, CheckCircle2, ArrowRight, ArrowLeft, Loader2, AlertCircle, Info } from "lucide-react";
+import { Building2, Key, CheckCircle2, ArrowRight, ArrowLeft, Loader2, AlertCircle, Info, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const STEPS = [
   { icon: Building2, label: "Empresa" },
+  { icon: Palette, label: "Marca" },
   { icon: Key, label: "Credenciales CutABC" },
   { icon: CheckCircle2, label: "Validar conexión" },
+];
+
+const TIMEZONES = [
+  { value: "America/Santiago", label: "Santiago de Chile (GMT-3/-4)" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
+  { value: "America/Lima", label: "Lima (GMT-5)" },
+  { value: "America/Bogota", label: "Bogotá (GMT-5)" },
+  { value: "America/Mexico_City", label: "Ciudad de México (GMT-6)" },
+  { value: "America/Sao_Paulo", label: "São Paulo (GMT-3)" },
+  { value: "America/Montevideo", label: "Montevideo (GMT-3)" },
 ];
 
 export default function Onboarding() {
@@ -20,6 +31,12 @@ export default function Onboarding() {
   const [form, setForm] = useState({
     company_name: "",
     bcc_email: "",
+    logo_url: "",
+    brand_name: "",
+    store_url: "",
+    store_button_label: "Comprar insumos",
+    support_email: "",
+    timezone: "America/Santiago",
     cutabc_company_no: "",
     cutabc_username: "",
     cutabc_password: "",
@@ -84,6 +101,12 @@ export default function Onboarding() {
           _cutabc_company_no: form.cutabc_company_no,
           _cutabc_username: form.cutabc_username,
           _cutabc_password: form.cutabc_password,
+          _logo_url: form.logo_url || null,
+          _brand_name: form.brand_name || form.company_name,
+          _store_url: form.store_url || null,
+          _store_button_label: form.store_button_label || null,
+          _support_email: form.support_email || null,
+          _timezone: form.timezone || "America/Santiago",
         });
         if (error) throw error;
       }
@@ -104,6 +127,8 @@ export default function Onboarding() {
   const canGoNext = step === 0
     ? form.company_name.trim().length > 0
     : step === 1
+    ? true // marca: todo opcional
+    : step === 2
     ? form.cutabc_company_no.trim().length > 0 && form.cutabc_username.trim().length > 0 && form.cutabc_password.trim().length > 0
     : validationResult?.valid === true;
 
@@ -139,7 +164,7 @@ export default function Onboarding() {
               <div>
                 <p className="text-sm text-primary font-medium mb-1">¡Bienvenido a CutMonitor! 👋</p>
                 <h2 className="text-xl font-bold">Datos de tu empresa</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Vamos a configurar tu cuenta en 3 pasos rápidos. Empecemos con la información básica.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Vamos a configurar tu cuenta en 4 pasos rápidos. Empecemos con la información básica.</p>
               </div>
               <div className="space-y-3">
                 <div>
@@ -167,8 +192,98 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 1: CutABC Credentials */}
+          {/* Step 1: Marca y comunicación */}
           {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-bold">Marca y comunicación</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Personalizá los emails que reciben tus clientes finales. Todo es opcional — podés editarlo después.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">URL del logo</label>
+                  <input
+                    type="url"
+                    value={form.logo_url}
+                    onChange={e => handleChange("logo_url", e.target.value)}
+                    placeholder="https://miempresa.com/logo.png"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {form.logo_url && (
+                    <div className="mt-2 rounded-lg border bg-white p-3 flex items-center justify-center">
+                      <img src={form.logo_url} alt="Logo preview" className="h-10 max-w-[200px] object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    </div>
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">Si lo dejás vacío no se muestra logo en los emails.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Nombre de marca para emails</label>
+                  <input
+                    type="text"
+                    value={form.brand_name}
+                    onChange={e => handleChange("brand_name", e.target.value)}
+                    placeholder={form.company_name || "Mi Empresa"}
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Aparece como remitente y firma. Por defecto se usa el nombre de la empresa.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">URL de tu tienda online</label>
+                  <input
+                    type="url"
+                    value={form.store_url}
+                    onChange={e => handleChange("store_url", e.target.value)}
+                    placeholder="https://miempresa.com/tienda"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Aparece como botón "Comprar" en alertas de stock bajo. Si lo dejás vacío, el botón no se muestra.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Texto del botón</label>
+                  <input
+                    type="text"
+                    value={form.store_button_label}
+                    onChange={e => handleChange("store_button_label", e.target.value)}
+                    placeholder="Comprar insumos"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Email de soporte para tus clientes</label>
+                  <input
+                    type="email"
+                    value={form.support_email}
+                    onChange={e => handleChange("support_email", e.target.value)}
+                    placeholder="soporte@miempresa.com"
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">Aparece en el pie de los emails. Si lo dejás vacío, se sugiere "contacte a su ejecutivo comercial".</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Zona horaria</label>
+                  <select
+                    value={form.timezone}
+                    onChange={e => handleChange("timezone", e.target.value)}
+                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {TIMEZONES.map(tz => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">Las alertas se disparan en esta hora local.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: CutABC Credentials */}
+          {step === 2 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-bold">Credenciales CutABC</h2>
@@ -230,8 +345,8 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 2: Validate */}
-          {step === 2 && (
+          {/* Step 3: Validate */}
+          {step === 3 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-bold">Validar conexión</h2>
@@ -285,7 +400,7 @@ export default function Onboarding() {
                         <p className="font-semibold text-red-300">Error de conexión</p>
                         <p className="text-sm text-muted-foreground mt-1">{validationResult.error}</p>
                         <button
-                          onClick={() => setStep(1)}
+                          onClick={() => setStep(2)}
                           className="mt-2 text-sm text-primary hover:underline"
                         >
                           ← Revisar credenciales
@@ -308,7 +423,7 @@ export default function Onboarding() {
               <ArrowLeft className="h-4 w-4" /> Atrás
             </button>
 
-            {step < 2 ? (
+            {step < 3 ? (
               <button
                 onClick={() => setStep(s => s + 1)}
                 disabled={!canGoNext}
