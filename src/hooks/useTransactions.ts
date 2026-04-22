@@ -13,6 +13,7 @@ export interface DeviceTransaction {
   branch_name: string | null;
   creator: string | null;
   remark: string | null;
+  summary: string | null;
   audit_date: string | null;
   created_at: string;
 }
@@ -26,7 +27,7 @@ export function useDeviceTransactions(fixno: string | undefined) {
         .from("device_transactions")
         .select("*")
         .eq("fixno", fixno)
-        .order("bill_date", { ascending: false });
+        .order("audit_date", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
       return (data ?? []) as DeviceTransaction[];

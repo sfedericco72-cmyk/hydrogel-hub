@@ -222,6 +222,7 @@ async function syncTenant(
     branch_name: (t.fixna as string) || null,
     creator: (t.creater as string) || null,
     remark: (t.remark as string) || null,
+    summary: (t.summary as string) || null,
     audit_date: t.auditdt ? new Date((t.auditdt as string).replace(" ", "T")).toISOString() : null,
     raw_data: t,
     tenant_id: tenantId,

@@ -247,6 +247,7 @@ export type Database = {
           quantity: number
           raw_data: Json | null
           remark: string | null
+          summary: string | null
           tenant_id: string | null
           transaction_type: string | null
         }
@@ -264,6 +265,7 @@ export type Database = {
           quantity?: number
           raw_data?: Json | null
           remark?: string | null
+          summary?: string | null
           tenant_id?: string | null
           transaction_type?: string | null
         }
@@ -281,6 +283,7 @@ export type Database = {
           quantity?: number
           raw_data?: Json | null
           remark?: string | null
+          summary?: string | null
           tenant_id?: string | null
           transaction_type?: string | null
         }
