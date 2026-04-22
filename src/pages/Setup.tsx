@@ -1,10 +1,20 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock, Send, Calendar } from "lucide-react";
+import { ArrowLeft, Save, Settings, Building2, Bell, TrendingUp, Wifi, Database, Loader2, CheckCircle2, AlertCircle, Clock, Send, Calendar, Palette } from "lucide-react";
 import { useTenantSettings, useUpdateTenantSettings } from "@/hooks/useTenantSettings";
 import { useBackfillStatus, useRunBackfill } from "@/hooks/useBackfillHistory";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+const TIMEZONES = [
+  { value: "America/Santiago", label: "Santiago de Chile (GMT-3/-4)" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
+  { value: "America/Lima", label: "Lima (GMT-5)" },
+  { value: "America/Bogota", label: "Bogotá (GMT-5)" },
+  { value: "America/Mexico_City", label: "Ciudad de México (GMT-6)" },
+  { value: "America/Sao_Paulo", label: "São Paulo (GMT-3)" },
+  { value: "America/Montevideo", label: "Montevideo (GMT-3)" },
+];
 
 export default function Setup() {
   const navigate = useNavigate();
@@ -14,6 +24,12 @@ export default function Setup() {
   const [form, setForm] = useState({
     company_name: "",
     bcc_email: "",
+    logo_url: "",
+    brand_name: "",
+    store_url: "",
+    store_button_label: "",
+    support_email: "",
+    timezone: "America/Santiago",
     attach_rate_green: 80,
     attach_rate_yellow: 50,
     low_stock_days: 7,
@@ -30,6 +46,12 @@ export default function Setup() {
       setForm({
         company_name: settings.company_name,
         bcc_email: settings.bcc_email ?? "",
+        logo_url: settings.logo_url ?? "",
+        brand_name: settings.brand_name ?? "",
+        store_url: settings.store_url ?? "",
+        store_button_label: settings.store_button_label ?? "",
+        support_email: settings.support_email ?? "",
+        timezone: settings.timezone ?? "America/Santiago",
         attach_rate_green: settings.attach_rate_green,
         attach_rate_yellow: settings.attach_rate_yellow,
         low_stock_days: settings.low_stock_days,
@@ -52,6 +74,12 @@ export default function Setup() {
       await updateSettings.mutateAsync({
         company_name: form.company_name,
         bcc_email: form.bcc_email || null,
+        logo_url: form.logo_url || null,
+        brand_name: form.brand_name || null,
+        store_url: form.store_url || null,
+        store_button_label: form.store_button_label || null,
+        support_email: form.support_email || null,
+        timezone: form.timezone || "America/Santiago",
         attach_rate_green: form.attach_rate_green,
         attach_rate_yellow: form.attach_rate_yellow,
         low_stock_days: form.low_stock_days,
