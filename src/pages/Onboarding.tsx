@@ -1,13 +1,24 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, Key, CheckCircle2, ArrowRight, ArrowLeft, Loader2, AlertCircle, Info } from "lucide-react";
+import { Building2, Key, CheckCircle2, ArrowRight, ArrowLeft, Loader2, AlertCircle, Info, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const STEPS = [
   { icon: Building2, label: "Empresa" },
+  { icon: Palette, label: "Marca" },
   { icon: Key, label: "Credenciales CutABC" },
   { icon: CheckCircle2, label: "Validar conexión" },
+];
+
+const TIMEZONES = [
+  { value: "America/Santiago", label: "Santiago de Chile (GMT-3/-4)" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
+  { value: "America/Lima", label: "Lima (GMT-5)" },
+  { value: "America/Bogota", label: "Bogotá (GMT-5)" },
+  { value: "America/Mexico_City", label: "Ciudad de México (GMT-6)" },
+  { value: "America/Sao_Paulo", label: "São Paulo (GMT-3)" },
+  { value: "America/Montevideo", label: "Montevideo (GMT-3)" },
 ];
 
 export default function Onboarding() {
@@ -20,6 +31,12 @@ export default function Onboarding() {
   const [form, setForm] = useState({
     company_name: "",
     bcc_email: "",
+    logo_url: "",
+    brand_name: "",
+    store_url: "",
+    store_button_label: "Comprar insumos",
+    support_email: "",
+    timezone: "America/Santiago",
     cutabc_company_no: "",
     cutabc_username: "",
     cutabc_password: "",
@@ -84,6 +101,12 @@ export default function Onboarding() {
           _cutabc_company_no: form.cutabc_company_no,
           _cutabc_username: form.cutabc_username,
           _cutabc_password: form.cutabc_password,
+          _logo_url: form.logo_url || null,
+          _brand_name: form.brand_name || form.company_name,
+          _store_url: form.store_url || null,
+          _store_button_label: form.store_button_label || null,
+          _support_email: form.support_email || null,
+          _timezone: form.timezone || "America/Santiago",
         });
         if (error) throw error;
       }
@@ -104,6 +127,8 @@ export default function Onboarding() {
   const canGoNext = step === 0
     ? form.company_name.trim().length > 0
     : step === 1
+    ? true // marca: todo opcional
+    : step === 2
     ? form.cutabc_company_no.trim().length > 0 && form.cutabc_username.trim().length > 0 && form.cutabc_password.trim().length > 0
     : validationResult?.valid === true;
 
