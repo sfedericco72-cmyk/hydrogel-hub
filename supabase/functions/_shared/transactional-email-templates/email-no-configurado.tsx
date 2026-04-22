@@ -4,25 +4,37 @@ import {
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const SITE_NAME = "Bitec Hydrogel Hub"
-const LOGO_URL = "https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png"
+const DEFAULT_SITE_NAME = "CutMonitor"
 
 interface EmailNoConfiguradoProps {
   branchName?: string
   fixno?: string
   customerName?: string
   alertType?: string
+  brandName?: string
+  logoUrl?: string
 }
 
-const EmailNoConfiguradoEmail = ({ branchName, fixno, customerName, alertType }: EmailNoConfiguradoProps) => (
+const EmailNoConfiguradoEmail = ({
+  branchName,
+  fixno,
+  customerName,
+  alertType,
+  brandName,
+  logoUrl,
+}: EmailNoConfiguradoProps) => {
+  const siteName = brandName || DEFAULT_SITE_NAME
+  return (
   <Html lang="es" dir="ltr">
     <Head />
     <Preview>📋 Equipo sin email configurado: {branchName || fixno || 'un equipo'}</Preview>
     <Body style={main}>
       <Container style={container}>
+        {logoUrl ? (
         <Section style={headerSection}>
-          <Img src={LOGO_URL} alt="Bitec" width="120" height="40" style={logo} />
+            <Img src={logoUrl} alt={siteName} width="120" height="40" style={logo} />
         </Section>
+        ) : null}
 
         <Heading style={h1}>📋 Email de alerta no configurado</Heading>
         <Text style={text}>
@@ -42,19 +54,27 @@ const EmailNoConfiguradoEmail = ({ branchName, fixno, customerName, alertType }:
 
         <Hr style={hr} />
         <Text style={footer}>
-          Este es un mensaje automático de {SITE_NAME}.
+          Este es un mensaje automático de {siteName}.
         </Text>
       </Container>
     </Body>
   </Html>
-)
+  )
+}
 
 export const template = {
   component: EmailNoConfiguradoEmail,
   subject: (data: Record<string, any>) =>
     `📋 Email no configurado: ${data.branchName || data.fixno || 'equipo'} (alerta ${data.alertType || ''})`,
   displayName: 'Email de alerta no configurado',
-  previewData: { branchName: 'Sucursal Centro', fixno: 'FX-1234', customerName: 'Hospital ABC', alertType: 'stock bajo' },
+  previewData: {
+    branchName: 'Sucursal Centro',
+    fixno: 'FX-1234',
+    customerName: 'Hospital ABC',
+    alertType: 'stock bajo',
+    brandName: 'Bitec Hydrogel Hub',
+    logoUrl: 'https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png',
+  },
 } satisfies TemplateEntry
 
 const main = { backgroundColor: '#ffffff', fontFamily: "'DM Sans', Arial, sans-serif" }

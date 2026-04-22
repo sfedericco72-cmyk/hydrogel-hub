@@ -4,24 +4,37 @@ import {
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const SITE_NAME = "Bitec Hydrogel Hub"
-const LOGO_URL = "https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png"
+const DEFAULT_SITE_NAME = "CutMonitor"
 
 interface DesconectadoProps {
   branchName?: string
   fixno?: string
   daysSinceOnline?: number
+  brandName?: string
+  logoUrl?: string
+  supportEmail?: string
 }
 
-const DesconectadoEmail = ({ branchName, fixno, daysSinceOnline }: DesconectadoProps) => (
+const DesconectadoEmail = ({
+  branchName,
+  fixno,
+  daysSinceOnline,
+  brandName,
+  logoUrl,
+  supportEmail,
+}: DesconectadoProps) => {
+  const siteName = brandName || DEFAULT_SITE_NAME
+  return (
   <Html lang="es" dir="ltr">
     <Head />
     <Preview>🔌 Equipo desconectado: {branchName || fixno || 'un equipo'} sin conexión hace {daysSinceOnline ?? '?'} días</Preview>
     <Body style={main}>
       <Container style={container}>
+        {logoUrl ? (
         <Section style={headerSection}>
-          <Img src={LOGO_URL} alt="Bitec" width="120" height="40" style={logo} />
+            <Img src={logoUrl} alt={siteName} width="120" height="40" style={logo} />
         </Section>
+        ) : null}
 
         <Heading style={h1}>🔌 Equipo Desconectado</Heading>
         <Text style={text}>
@@ -49,19 +62,28 @@ const DesconectadoEmail = ({ branchName, fixno, daysSinceOnline }: DesconectadoP
 
         <Hr style={hr} />
         <Text style={footer}>
-          Este es un mensaje automático de {SITE_NAME}. Si tiene consultas, contacte a su ejecutivo comercial.
+          Este es un mensaje automático de {siteName}.
+          {supportEmail ? <> Si tiene consultas, escríbanos a <a href={`mailto:${supportEmail}`} style={footerLink}>{supportEmail}</a>.</> : ' Si tiene consultas, contacte a su ejecutivo comercial.'}
         </Text>
       </Container>
     </Body>
   </Html>
-)
+  )
+}
 
 export const template = {
   component: DesconectadoEmail,
   subject: (data: Record<string, any>) =>
     `🔌 Equipo desconectado: ${data.branchName || data.fixno || 'equipo'} sin conexión hace ${data.daysSinceOnline ?? '?'} días`,
   displayName: 'Equipo desconectado',
-  previewData: { branchName: 'Sucursal Centro', fixno: 'FX-1234', daysSinceOnline: 6 },
+  previewData: {
+    branchName: 'Sucursal Centro',
+    fixno: 'FX-1234',
+    daysSinceOnline: 6,
+    brandName: 'Bitec Hydrogel Hub',
+    logoUrl: 'https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png',
+    supportEmail: 'santiago.federico@bitec.cl',
+  },
 } satisfies TemplateEntry
 
 const main = { backgroundColor: '#ffffff', fontFamily: "'DM Sans', Arial, sans-serif" }
@@ -81,3 +103,4 @@ const alertTitle = { fontSize: '15px', fontWeight: 'bold' as const, color: '#991
 const alertText = { fontSize: '14px', color: '#7f1d1d', margin: '0 0 8px', lineHeight: '1.5' }
 const hr = { borderColor: '#e5e7eb', margin: '30px 0' }
 const footer = { fontSize: '12px', color: '#9ca3af', margin: '0', lineHeight: '1.5' }
+const footerLink = { color: '#0ea5e9', textDecoration: 'none' }
