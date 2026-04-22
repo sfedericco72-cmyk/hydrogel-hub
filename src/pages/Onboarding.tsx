@@ -345,8 +345,8 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 2: Validate */}
-          {step === 2 && (
+          {/* Step 3: Validate */}
+          {step === 3 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-bold">Validar conexión</h2>
@@ -400,7 +400,7 @@ export default function Onboarding() {
                         <p className="font-semibold text-red-300">Error de conexión</p>
                         <p className="text-sm text-muted-foreground mt-1">{validationResult.error}</p>
                         <button
-                          onClick={() => setStep(1)}
+                          onClick={() => setStep(2)}
                           className="mt-2 text-sm text-primary hover:underline"
                         >
                           ← Revisar credenciales
@@ -423,7 +423,7 @@ export default function Onboarding() {
               <ArrowLeft className="h-4 w-4" /> Atrás
             </button>
 
-            {step < 2 ? (
+            {step < 3 ? (
               <button
                 onClick={() => setStep(s => s + 1)}
                 disabled={!canGoNext}
