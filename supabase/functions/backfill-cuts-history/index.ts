@@ -30,59 +30,27 @@ async function loginCutABC(creds: TenantCredentials): Promise<string> {
   return data.data.sessionId;
 }
 
-async function fetchAllPages(
+async function fetchPage(
   sessionId: string,
   from: string,
-  to: string
-): Promise<{ transactions: Record<string, unknown>[]; expected: number }> {
-  const pageSize = 1000;
-
-  // First page to get reccnt
-  const firstRes = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+  to: string,
+  page: number,
+  pageSize: number
+): Promise<{ items: Record<string, unknown>[]; reccnt: number }> {
+  const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
     body: new URLSearchParams({
       itemno: "fixbalaqty",
       data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
-      pageindex: "1",
+      pageindex: String(page),
       pagesize: String(pageSize),
     }),
   });
-  const firstData = await firstRes.json();
-  if (firstData.success !== "1" || !firstData.listTask) return { transactions: [], expected: 0 };
-
-  const expected = parseInt(firstData.reccnt);
-  const all: Record<string, unknown>[] = [...firstData.listTask];
-  console.log(`  [${from}→${to}] Page 1: ${all.length}/${expected}`);
-
-  if (all.length >= expected) return { transactions: all, expected };
-
-  // Remaining pages in parallel
-  const totalPages = Math.ceil(expected / pageSize);
-  const promises = [];
-  for (let p = 2; p <= totalPages; p++) {
-    promises.push(
-      fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
-        body: new URLSearchParams({
-          itemno: "fixbalaqty",
-          data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
-          pageindex: String(p),
-          pagesize: String(pageSize),
-        }),
-      }).then(r => r.json()).then(d => {
-        const items = (d.success === "1" && d.listTask) ? d.listTask as Record<string, unknown>[] : [];
-        console.log(`  [${from}→${to}] Page ${p}: ${items.length}`);
-        return items;
-      })
-    );
-  }
-
-  const results = await Promise.all(promises);
-  for (const r of results) all.push(...r);
-
-  return { transactions: all, expected };
+  const d = await res.json();
+  const items = (d.success === "1" && d.listTask) ? d.listTask as Record<string, unknown>[] : [];
+  const reccnt = parseInt(d.reccnt) || 0;
+  return { items, reccnt };
 }
 
 Deno.serve(async (req) => {
