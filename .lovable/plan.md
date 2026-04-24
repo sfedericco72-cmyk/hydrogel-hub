@@ -1,77 +1,58 @@
-## Diagnóstico: el backfill está hardcodeado a Bitec
+# Arreglar carga de historia de KLAZ
 
-Tu intuición es correcta. La función `backfill-cuts-history` **ignora completamente el tenant del usuario logueado** y siempre carga datos con las credenciales de Bitec hardcodeadas en variables de entorno. Por eso:
+## Diagnóstico
 
-1. **Los meses que ves precargados (Abr 2025 → Ene 2026)** son del backfill que vos corriste hace una semana logueado como Bitec. Como la tabla `cuts_history_backfill` no tiene `tenant_id`, esos registros aparecen para CUALQUIER usuario que abra `/setup`.
-2. **Cuando como KLAZ apretás "Cargar"**, la función se loguea con credenciales de Bitec (`CUT05` + usuario `lovable`), trae transacciones de Bitec, e intenta guardarlas con `tenant_id = NULL` (porque el upsert no incluye tenant_id). Resultado: 182 registros huérfanos en BD que no se ven en ningún dashboard.
+El intento de cargar **2026-03 para KLAZ** quedó trabado en estado `loading` con 0 registros. Los logs muestran que la edge function alcanzó a procesar la primera página (1000/8356) y se cortó silenciosamente.
 
-### Evidencia
+**Causa raíz**: KLAZ tiene **mucho más volumen** que Bitec (8356 transacciones en una sola quincena vs ~500-1000 mensuales de Bitec). La edge function actual:
+- Pide todas las páginas en paralelo (`Promise.all` sobre 9 páginas → 9000 registros en memoria a la vez)
+- Procesa todo y luego upserta en chunks de 50
 
-**Tabla `tenants`:**
-| name | slug | cutabc_username |
-|------|------|-----------------|
-| Bitec | bitec | lovable |
-| KLAZ | klaz-bef23799 | lovablearg |
+Resultado: timeout (~150s) o muerte por memoria antes de terminar la primera quincena.
 
-**Tabla `device_cuts_history` por tenant:**
-| tenant_id | registros | rango |
-|-----------|-----------|-------|
-| Bitec | 8.479 | abr/2025 → hoy |
-| KLAZ | 302 | hoy únicamente (vienen del sync diario) |
-| **NULL (huérfanos)** | **182** | **ene/2026** ← creados por tu intento de backfill como KLAZ |
+Además, como quedó en `loading`, el botón de "Cargar" en `/setup` no permite reintentar (la UI lo muestra como en progreso).
 
-**Tabla `cuts_history_backfill`:** 10 períodos cargados, todos sin `tenant_id` → la UI los muestra a todos los usuarios.
+## Plan
 
-**Código culpable** (`supabase/functions/backfill-cuts-history/index.ts`):
-- Línea 10-25: `loginCutABC()` lee `CUTABC_COMPANY_NUMBER`, `CUTABC_USERNAME`, `CUTABC_PASSWORD` de **secrets de entorno** (Bitec) — no de `tenant_settings`.
-- Línea 88: lee solo `period` del body, nunca pregunta por tenant.
-- Línea 99-104: upsert sin `tenant_id`, `onConflict: "period"` (debería ser `period,tenant_id`).
-- Línea 180-185: el array de history **no incluye `tenant_id`** → se inserta como NULL.
-- Línea 193: `onConflict: "fixno,cut_date"` (la tabla ya tiene constraint `fixno,cut_date,tenant_id` por sync-cutabc, pero como tenant_id es NULL acá no colisiona con los datos reales).
+**1. Liberar el período trabado** (1 query SQL)
+- Resetear `2026-03` de KLAZ de `loading` → `pending` para poder reintentar.
 
-Compará con `sync-cutabc` que sí lo hace bien (lee `tenant_settings`, itera tenants, incluye `tenant_id` en upserts).
+**2. Robustecer `backfill-cuts-history` para volúmenes altos**
+- Procesar las páginas **secuencialmente** dentro de cada quincena (no en paralelo) para evitar pico de memoria.
+- Hacer **upsert incremental por página**: en vez de acumular 9000 registros y procesar al final, agregar al `dailyMap` y hacer flush a DB cada N páginas.
+- Reducir el tamaño de página de 1000 → 500 para acelerar la primera respuesta y reducir memoria por request.
+- Agregar logging de progreso más granular para detectar dónde se traba si vuelve a fallar.
+- Mantener la división en quincenas (ya está bien).
 
-## Plan de arreglo
+**3. Detección automática de "loading" zombie**
+- En la UI (`Setup.tsx` o el hook `useBackfillHistory`), considerar como "reintenable" cualquier período en `loading` cuyo `started_at` sea de hace más de 5 minutos (claramente murió). Mostrarlo con un ícono de warning + botón "Reintentar" en lugar de "En progreso".
 
-### 1. Refactor de `backfill-cuts-history`
-Replicar el patrón de `sync-cutabc`:
-- Recibir `period` + identificar al tenant del caller (vía JWT del usuario que invoca, leer su `profiles.tenant_id`)
-- Levantar credenciales CutABC de `tenant_settings` para ese tenant
-- Hacer login con esas credenciales (no con secrets)
-- Incluir `tenant_id` en TODOS los upserts (`device_cuts_history` y `cuts_history_backfill`)
-- Cambiar `onConflict` a `"fixno,cut_date,tenant_id"` y `"period,tenant_id"` respectivamente
+**4. Reintentar 2026-03 KLAZ**
+- Después de deployar, vos disparás manualmente el botón "Cargar" desde `/setup` con el usuario de KLAZ logueado, y verifico los logs.
 
-### 2. Migración de schema
-- Agregar columna `tenant_id uuid` a `cuts_history_backfill`
-- Cambiar la unique constraint de `(period)` a `(period, tenant_id)` para que cada tenant tenga su propio historial de backfills
-- Agregar RLS policy: `tenant_id = get_user_tenant_id()` en SELECT/INSERT/UPDATE (hoy es `true` para todos)
+## Lo que NO se toca
 
-### 3. Limpieza de datos
-- **Borrar los 182 registros huérfanos** en `device_cuts_history` con `tenant_id IS NULL` (los que generaste con tus intentos como KLAZ — son de Bitec pero quedaron sin dueño y no se ven en ningún lado)
-- **Asignar los 10 períodos existentes en `cuts_history_backfill` al tenant Bitec** (ya que vos los corriste logueado como Bitec). Así KLAZ va a ver su tabla limpia.
+- El tenant Bitec y sus 10 períodos ya cargados quedan intactos.
+- La estructura de tablas y RLS no cambia (la migración del turno anterior ya quedó bien).
+- La UI general de `/setup` sigue igual; solo el manejo del estado "loading zombie".
 
-### 4. Frontend (`useBackfillStatus`)
-Hoy hace `select * from cuts_history_backfill` sin filtro — confía en RLS. Una vez que el RLS esté bien, va a filtrar automáticamente. **No requiere cambios de código en el hook**, solo asegurar que la query siga funcionando.
+## Detalle técnico
 
-### 5. Edge function: `verify_jwt`
-Agregar `[functions.backfill-cuts-history] verify_jwt = true` en `supabase/config.toml` para poder leer el `auth.uid()` del caller. Hoy está en default. Y dentro de la función, usar el JWT del request para crear un cliente con `Authorization` header y consultar `profiles` (o usar service role + leer el sub del JWT).
+**SQL de desbloqueo**:
+```sql
+UPDATE cuts_history_backfill 
+SET status = 'pending', started_at = NULL, records_loaded = 0
+WHERE period = '2026-03' AND tenant_id = 'a18d13ac-dc92-4059-80cc-06d7b91fedb3';
+```
 
-## Resultado esperado
+**Cambios en `backfill-cuts-history/index.ts`**:
+- `fetchAllPages` → reemplazada por un loop secuencial que devuelve un async iterator (o callback) para procesar página por página.
+- Mover la lógica de "Consume → dailyMap" dentro del loop de páginas.
+- Hacer flush del `dailyMap` parcial a `device_cuts_history` cada 3 páginas (~1500 transacciones), o al terminar cada quincena.
+- Page size: 500 en lugar de 1000.
 
-Después del fix, cuando vos (como usuario de KLAZ) apretes "Cargar Mar 2026":
-- La función se loguea en CutABC con `lovablearg` (las credenciales de KLAZ)
-- Trae transacciones del tenant KLAZ
-- Las guarda con `tenant_id = a18d13ac-...` (KLAZ)
-- En `/setup` solo ves los backfills de KLAZ (la columna "Recargar" arrancará vacía para KLAZ, y Bitec va a ver los suyos sin cambios)
-- El dashboard de KLAZ por fin va a mostrar cortes históricos
+**Cambios en UI** (`useBackfillHistory.ts` o `Setup.tsx`):
+- Helper `isStaleLoading(row)`: `row.status === 'loading' && row.started_at && (Date.now() - new Date(row.started_at).getTime()) > 5 * 60 * 1000`.
+- Si `isStaleLoading`, tratar el período como reintentable con badge de warning ("Carga interrumpida — Reintentar").
 
-## Archivos a tocar
-
-- `MIGRATION` agregar `tenant_id` a `cuts_history_backfill`, nueva unique, nueva RLS, limpieza de datos
-- `EDIT supabase/functions/backfill-cuts-history/index.ts` — refactor completo siguiendo patrón de `sync-cutabc`
-- `EDIT supabase/config.toml` — `verify_jwt = true` para `backfill-cuts-history`
-- `DEPLOY backfill-cuts-history`
-
-## Una pregunta antes de ejecutar
-
-Los 10 períodos que ya están cargados (`2025-04` a `2026-01`, todos de Bitec): ¿los **asigno a Bitec** (mantienen su valor para Bitec, KLAZ los verá vacíos para recargarlos), o preferís **borrarlos todos** y que ambos tenants arranquen de cero? Recomiendo asignarlos a Bitec porque ya tienen 8.479 registros válidos asociados y borrarlos te obliga a recargar todo Bitec desde cero.
+**Deploy**: `backfill-cuts-history` se redeploya automáticamente.
