@@ -235,21 +235,31 @@ async function syncTenant(
   const yesterdayStr = yesterday.toISOString().split("T")[0];
 
   const fixnos = allDevices.map((d) => d.fixno);
-  const { data: yesterdayData } = await supabase
+  // Use the most recent known `total_cuts > 0` (within the 90-day daily
+  // window) as the previous baseline. Falling back to "yesterday only"
+  // breaks when migrated rows or missed syncs leave `total_cuts = 0`,
+  // which would make today's daily_cuts = full historical accumulator.
+  const { data: prevData } = await supabase
     .from("device_cuts_daily")
-    .select("fixno, total_cuts")
-    .eq("cut_date", yesterdayStr)
-    .in("fixno", fixnos);
+    .select("fixno, total_cuts, cut_date")
+    .eq("tenant_id", tenantId)
+    .in("fixno", fixnos)
+    .gt("total_cuts", 0)
+    .lt("cut_date", today)
+    .order("cut_date", { ascending: false });
 
-  const yesterdayMap = new Map<string, number>();
-  if (yesterdayData) {
-    yesterdayData.forEach((r: any) => yesterdayMap.set(r.fixno, r.total_cuts));
-  }
+  const prevTotalMap = new Map<string, number>();
+  (prevData ?? []).forEach((r: any) => {
+    if (!prevTotalMap.has(r.fixno)) prevTotalMap.set(r.fixno, r.total_cuts);
+  });
 
   const historyData = allDevices.map((d) => {
     const currentTotal = parseInt(d.useqty) || 0;
-    const prevTotal = yesterdayMap.get(d.fixno);
-    const dailyCuts = prevTotal !== undefined ? Math.max(0, currentTotal - prevTotal) : 0;
+    const prevTotal = prevTotalMap.get(d.fixno);
+    // If we have no prior baseline (brand-new device), default daily_cuts to 0
+    // to avoid recording the full historical accumulator as "today's cuts".
+    const dailyCuts =
+      prevTotal !== undefined ? Math.max(0, currentTotal - prevTotal) : 0;
     return {
       fixno: d.fixno,
       cut_date: today,

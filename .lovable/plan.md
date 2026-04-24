@@ -1,122 +1,110 @@
-# Rediseño del histórico de cortes: dos granularidades
+## Diagnóstico
 
-## El problema de raíz
-El límite por defecto de Supabase de **1.000 filas por query** trunca silenciosamente la consulta del Dashboard (`useMonthlyCutsMap` pide ~11k filas). Por eso la tarjeta y el reporte no coinciden.
+La vista semanal **sí está calculando bien la agrupación por semana ISO** (los datos en `device_cuts_daily` se agrupan correctamente en 12-13 semanas). El problema visual de "semanal = monthly" viene de un **bug de datos introducido en la migración**:
 
-Tu propuesta resuelve esto **estructuralmente**: si el agregado mensual ya está pre-calculado en una tabla, el Dashboard pide ~600 filas (1 por equipo × 6 meses) y entra holgado bajo el límite. Bonus: queda más limpio y rápido.
+### Lo que pasó
 
-> **Nota de tamaño**: hoy la tabla pesa solo 4.7 MB (16k filas, 2 tenants). El rediseño es por *claridad y performance de queries*, no por presión de espacio. Cuando se sumen tenants grandes va a notarse más.
+1. La migración inicial pobló `device_cuts_daily` con los datos diarios desde 1-feb-2026, copiando `daily_cuts` correctamente desde el legacy, pero **dejó `total_cuts = 0` en todos los registros migrados** (no era un dato necesario en el legacy).
+2. Hoy (2026-04-24) corrió el primer `sync-cutabc` con la nueva lógica. Esa lógica calcula:
+   ```
+   daily_cuts = currentTotal - prev_total_de_ayer
+   ```
+   Como `prev_total_de_ayer = 0` (por el punto 1), el resultado fue `daily_cuts = currentTotal` (el acumulado histórico completo del equipo).
+3. Ejemplo real: device `HX001121218162321` quedó hoy con `daily_cuts = 39.290` (cuando lo normal son ~3 cortes/día). Total tenant del 24-abr: **84.538 cortes** vs ~450 días normales.
+4. En el gráfico semanal eso hace que la semana W17 (actual) sea **enorme** y aplaste visualmente las otras 12 semanas a casi cero, dando la sensación de que "una sola barra = todo el mes".
 
-## Modelo nuevo
-
-Dos tablas con propósitos claros:
-
-### `device_cuts_daily` (granularidad fina, ventana móvil)
-- Una fila por equipo / día con cortes > 0
-- **Solo conserva los últimos 90 días** (rolling window). Más viejo se borra automáticamente.
-- Sirve para: vista **Semanal** del reporte (necesita resolución diaria para calcular semana ISO), última fecha con cortes (`useLastCutDates`), promedio de cortes/día (`useAvgDailyCuts`).
-- Columnas: `id, tenant_id, fixno, cut_date, daily_cuts, total_cuts, created_at`
-- Constraint único: `(tenant_id, fixno, cut_date)`
-
-### `device_cuts_monthly` (consolidado histórico, sin caducidad)
-- Una fila por equipo / mes con `total_cuts > 0`
-- Conserva **todo el historial** que hayamos cargado.
-- Sirve para: tarjetas del Dashboard (6 meses), vistas Mensual y Anual del reporte, MonthlyTimeline.
-- Columnas: `id, tenant_id, fixno, year_month (text 'YYYY-MM'), total_cuts, created_at, updated_at`
-- Constraint único: `(tenant_id, fixno, year_month)`
-
-Ambas con RLS idéntica a la actual: service role escribe, tenants leen lo suyo.
-
-## Cómo se llenan
-
-### Sync diario (`sync-cutabc`)
-Cuando inserta el snapshot diario en `device_cuts_daily`, además **incrementa** la fila correspondiente en `device_cuts_monthly` (UPSERT con suma). Así el mensual siempre está al día sin recalcular nada.
-
-### Backfill (`backfill-cuts-history`)
-Cuando el usuario carga un mes histórico:
-- Si el mes está dentro de los últimos 90 días → escribe en **ambas** tablas (diaria + mensual).
-- Si el mes es anterior a 90 días → escribe **solo en mensual** (suma directa de cortes del mes, no se guarda detalle diario).
-
-### Limpieza (cron)
-Job programado (pg_cron diario) que:
-1. Para cada fila de `device_cuts_daily` más vieja que 90 días: garantiza que el agregado mensual existe (idempotente) y la borra.
-2. Es un `DELETE FROM device_cuts_daily WHERE cut_date < current_date - interval '90 days'` — el mensual ya está poblado por sync/backfill.
-
-## Migración de los datos existentes
-
-Migración SQL que se corre una sola vez al desplegar el cambio:
+### Verificación
 
 ```text
-1. Crear las dos tablas nuevas con RLS.
-2. Poblar device_cuts_monthly desde device_cuts_history:
-   INSERT ... SELECT tenant_id, fixno, to_char(cut_date,'YYYY-MM'),
-                     SUM(daily_cuts), now(), now()
-              FROM device_cuts_history
-              WHERE daily_cuts > 0
-              GROUP BY tenant_id, fixno, to_char(cut_date,'YYYY-MM');
-3. Poblar device_cuts_daily desde device_cuts_history (solo últimos 90 días).
-4. Renombrar device_cuts_history → device_cuts_history_legacy (no se borra
-   por seguridad; se puede eliminar manual después de validar).
-5. Crear el cron job de limpieza (pg_cron, diario a las 03:00 UTC).
+fixno HX001121218162321:
+  2026-04-23  total_cuts=0     daily_cuts=2     ← migrado, total=0
+  2026-04-24  total_cuts=39290 daily_cuts=39290 ← sync de hoy: 39290-0
 ```
 
-## Cambios en código frontend
+Y el monthly de abril también quedó inflado, porque el job lo recalcula sumando `daily_cuts` del mes desde la tabla diaria.
 
-**`src/hooks/useDevices.ts`**
-- `useMonthlyCutsMap` → consulta `device_cuts_monthly` (filtra por `year_month >= startMonth`). Mucho menos volumen, sin paginación necesaria.
-- `useLastCutDates` → consulta `device_cuts_daily` (ventana de 90 días es suficiente para "última fecha con cortes" porque si no cortó en 90 días ya está inactivo).
-- `useAvgDailyCuts` → consulta `device_cuts_daily` (últimos 30 días).
+## Solución
 
-**`src/hooks/useCutsHistory.ts`** (usado por BranchDetail)
-- Para vista **Semanal** (últ. 3 meses): leer de `device_cuts_daily`.
-- Para vistas **Mensual** y **Anual**: leer de `device_cuts_monthly`.
-- Refactor: el hook devuelve `{ daily, monthly }` y BranchDetail usa la fuente según `resolution`.
+Dos arreglos: corregir los datos malos de hoy y blindar el código para que no se repita.
 
-**`src/hooks/useAssignmentCuts.ts`**
-- "Cortes desde asignación": si la asignación tiene <90 días → suma `device_cuts_daily`. Si es más vieja → combina `device_cuts_monthly` (meses completos) + `device_cuts_daily` (mes en curso, parcial). Manejo del mes parcial inicial igual.
+### 1. Corregir datos del 24-abr-2026 (one-shot)
 
-## Cambios en edge functions
+Recalcular `daily_cuts` y `total_cuts` del 24-abr para todos los devices, comparando `devices.total_cuts` actual contra el `total_cuts` real de antes (que tenemos en el legacy). Para los devices con `prev_total = 0` por la migración, usamos como referencia el último `total_cuts` real disponible en `device_cuts_history_legacy` (o `devices.total_cuts - daily_cuts_real_de_hoy_estimado`).
 
-**`sync-cutabc`**
-- Escribir snapshot diario en `device_cuts_daily` (igual que hoy en `device_cuts_history`).
-- Después: para los equipos que tuvieron `daily_cuts > 0` hoy, hacer UPSERT incremental en `device_cuts_monthly` (sumar al `total_cuts` existente del mes).
+Plan más simple y seguro: **borrar los registros del 24-abr y dejar que el próximo sync los re-cree bien**, una vez que arreglemos el `total_cuts` histórico.
 
-**`backfill-cuts-history`**
-- Mismo input (un período YYYY-MM), pero al volcar a la base:
-  - Calcular el total mensual y UPSERT en `device_cuts_monthly`.
-  - Si el período cae dentro de los últimos 90 días, además insertar el detalle diario en `device_cuts_daily`.
-- Renombrar internamente a algo como `backfill-monthly-cuts` (opcional, no crítico).
+Pasos en SQL (migration con `INSERT/UPDATE`):
 
-**`check-alerts`**
-- La query "últimos 30 días para promedio diario" pasa a `device_cuts_daily`.
-
-## Resumen de cambios
-
-```text
-Migración SQL:
-  + device_cuts_daily          (nueva)
-  + device_cuts_monthly        (nueva)
-  + pg_cron job limpieza
-  ~ device_cuts_history → renombrar a _legacy
-
-Edge functions:
-  ~ sync-cutabc                (escribir en ambas tablas)
-  ~ backfill-cuts-history      (escribir en ambas, según ventana)
-  ~ check-alerts               (leer de daily)
-
-Frontend:
-  ~ src/hooks/useDevices.ts    (3 hooks repuntados)
-  ~ src/hooks/useCutsHistory.ts (split daily/monthly)
-  ~ src/hooks/useAssignmentCuts.ts (combinar fuentes)
+a. Backfillear `total_cuts` en `device_cuts_daily` desde `device_cuts_history_legacy` (que sí tenía el acumulado correcto):
+```sql
+UPDATE device_cuts_daily d
+SET total_cuts = l.total_cuts
+FROM device_cuts_history_legacy l
+WHERE d.fixno = l.fixno
+  AND d.cut_date = l.cut_date
+  AND d.total_cuts = 0
+  AND l.total_cuts > 0;
 ```
 
-## Verificación post-deploy
-1. Tarjeta del Dashboard y total del reporte coinciden para cualquier equipo.
-2. Vista Semanal del reporte muestra las mismas 13 semanas que hoy.
-3. Vistas Mensual/Anual muestran el mismo histórico que hoy.
-4. Después de un sync, los números se actualizan en ambas vistas.
+b. Borrar los registros corruptos del 24-abr:
+```sql
+DELETE FROM device_cuts_daily WHERE cut_date = '2026-04-24';
+```
 
-## Riesgos y mitigaciones
-- **Doble escritura puede divergir**: lo evito con UPSERT incremental atómico desde el sync. Si pasa, el cron de limpieza puede correr en modo "rebuild" (recalcular `device_cuts_monthly` a partir de `device_cuts_history_legacy` que dejamos como backup).
-- **Cron podría fallar y acumular diario**: no rompe nada (solo crece la tabla); fácil de detectar y limpiar manual.
-- **Tabla _legacy ocupando espacio**: 4.7 MB hoy, intrascendente. La eliminás cuando quieras una vez validado.
+c. Recalcular el monthly de abril desde la tabla diaria (ya sin el outlier):
+```sql
+DELETE FROM device_cuts_monthly WHERE year_month = '2026-04';
+INSERT INTO device_cuts_monthly (tenant_id, fixno, year_month, total_cuts)
+SELECT tenant_id, fixno, '2026-04', SUM(daily_cuts)
+FROM device_cuts_daily
+WHERE cut_date >= '2026-04-01' AND cut_date < '2026-05-01'
+GROUP BY tenant_id, fixno;
+```
+
+d. Disparar manualmente `sync-cutabc` para regenerar el snapshot del 24-abr con `daily_cuts` correctos.
+
+### 2. Blindar `sync-cutabc` para evitar el bug en el futuro
+
+En el cálculo de `daily_cuts`, si `prev_total === 0` y `currentTotal` es muy grande (ej. > prev_total + 1000 cortes), tratar como "primer registro" y usar `daily_cuts = 0` en vez del salto enorme. Más simple: si `prev_total === 0` **y** existe algún registro previo con `total_cuts > 0` para ese device, usar el más reciente con `total_cuts > 0` como referencia.
+
+Cambio puntual en `supabase/functions/sync-cutabc/index.ts`:
+```ts
+// Buscar el último total_cuts > 0 conocido (no solo ayer), para evitar
+// arrastrar ceros heredados de la migración o de syncs fallidos.
+const { data: lastKnown } = await supabase
+  .from("device_cuts_daily")
+  .select("fixno, total_cuts, cut_date")
+  .eq("tenant_id", tenantId)
+  .gt("total_cuts", 0)
+  .lt("cut_date", today)
+  .in("fixno", fixnos)
+  .order("cut_date", { ascending: false });
+
+// Construir mapa "último total conocido" tomando el primero por fixno.
+const prevTotalMap = new Map<string, number>();
+(lastKnown ?? []).forEach((r: any) => {
+  if (!prevTotalMap.has(r.fixno)) prevTotalMap.set(r.fixno, r.total_cuts);
+});
+```
+
+Y cambiar el cálculo:
+```ts
+const prevTotal = prevTotalMap.get(d.fixno);
+const dailyCuts = prevTotal !== undefined && currentTotal >= prevTotal
+  ? currentTotal - prevTotal
+  : 0;
+```
+
+(Nota: la query trae a lo sumo ~90 días × N devices, paginada por chunks si pasa los 1000.)
+
+## Resultado esperado
+
+- Vista semanal del BranchDetail muestra las 12-13 barras semanales con valores realistas (~150-300 cortes por semana en lugar de una barra gigante de 39k).
+- Tarjeta del dashboard y reporte mensual de abril dejan de estar inflados.
+- Próximos syncs no vuelven a romperse aunque algún día venga con `total_cuts = 0`.
+
+## Archivos a tocar
+
+- **Nueva migration SQL**: pasos a-c de arriba (backfill `total_cuts`, borrar 24-abr, recalcular abril mensual).
+- **`supabase/functions/sync-cutabc/index.ts`**: usar "último total conocido > 0" en lugar del de ayer estricto.
+- Disparar `sync-cutabc` manualmente al final para repoblar el 24-abr correctamente.
