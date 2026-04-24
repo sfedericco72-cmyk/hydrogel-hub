@@ -105,45 +105,67 @@ async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
 async function fetchAllTransactions(
   sessionId: string,
   tenantLabel: string,
+  brannas: string[],
 ): Promise<Record<string, unknown>[]> {
-  const allTx: Record<string, unknown>[] = [];
-  let pageIndex = 1;
   const pageSize = 500;
 
   // Only fetch the last SYNC_WINDOW_DAYS days. Older history is loaded via backfill-cuts-history.
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - SYNC_WINDOW_DAYS);
   const billdateBeg = cutabcDate(since);
-  console.log(`[${tenantLabel}] Tx window: from ${billdateBeg} (last ${SYNC_WINDOW_DAYS}d)`);
 
-  while (true) {
-    const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        sessionId: sessionId,
-      },
-      body: new URLSearchParams({
-        itemno: "custbalaqry",
-        data: JSON.stringify([
-          { billdate_beg: billdateBeg },
-          { billdate_end: "" },
-          { branna: "" },
-          { fixno: "" },
-        ]),
-        pageindex: String(pageIndex),
-        pagesize: String(pageSize),
-      }),
-    });
+  // CutABC partitions data internally by `branna`. Without a branna filter, the
+  // API returns only aggregate/distribution rows and hides per-device "Consume"
+  // transactions. We iterate by branna (auto-discovered from the device list)
+  // and merge results, deduping by (fixno, billno).
+  const targets = brannas.length > 0 ? brannas : [""];
+  console.log(
+    `[${tenantLabel}] Tx window: from ${billdateBeg} (last ${SYNC_WINDOW_DAYS}d), brannas: [${targets.join(", ")}]`,
+  );
 
-    const data = await res.json();
-    if (data.success !== "1" || !data.listTask) break;
+  const seen = new Set<string>();
+  const allTx: Record<string, unknown>[] = [];
 
-    allTx.push(...data.listTask);
-    const total = parseInt(data.reccnt) || allTx.length;
-    console.log(`[${tenantLabel}] Tx page ${pageIndex}: ${allTx.length}/${total}`);
-    if (allTx.length >= total) break;
-    pageIndex++;
+  for (const branna of targets) {
+    let pageIndex = 1;
+    let brannaCount = 0;
+    while (true) {
+      const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          sessionId: sessionId,
+        },
+        body: new URLSearchParams({
+          itemno: "custbalaqry",
+          data: JSON.stringify([
+            { billdate_beg: billdateBeg },
+            { billdate_end: "" },
+            { branna: branna },
+            { fixno: "" },
+          ]),
+          pageindex: String(pageIndex),
+          pagesize: String(pageSize),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success !== "1" || !data.listTask) break;
+
+      const items = data.listTask as Record<string, unknown>[];
+      for (const tx of items) {
+        const key = `${tx.fixno ?? ""}|${tx.billno ?? ""}`;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        allTx.push(tx);
+      }
+      brannaCount += items.length;
+
+      const total = parseInt(data.reccnt) || brannaCount;
+      console.log(`[${tenantLabel}] Tx [${branna || "*"}] page ${pageIndex}: ${brannaCount}/${total}`);
+      if (brannaCount >= total) break;
+      pageIndex++;
+    }
   }
 
   return allTx;
@@ -162,6 +184,13 @@ async function syncTenant(
   console.log(`[${tenantId}] Fetching devices...`);
   const allDevices = await fetchAllDevices(sessionId);
   console.log(`[${tenantId}] Fetched ${allDevices.length} devices`);
+
+  // Auto-discover the brannas this user can see in CutABC. Used only as an
+  // internal sync mechanism — not exposed to CutMonitor users.
+  const brannas = Array.from(
+    new Set(allDevices.map((d) => (d.branna || "").trim()).filter((b) => b.length > 0)),
+  );
+  console.log(`[${tenantId}] Detected ${brannas.length} branna(s): [${brannas.join(", ")}]`);
 
   // Upsert devices
   const upsertData = allDevices.map((d) => ({
@@ -240,7 +269,7 @@ async function syncTenant(
 
   // Sync transactions
   console.log(`[${tenantId}] Fetching transactions...`);
-  const allTransactions = await fetchAllTransactions(sessionId, tenantId);
+  const allTransactions = await fetchAllTransactions(sessionId, tenantId, brannas);
   console.log(`[${tenantId}] Fetched ${allTransactions.length} transactions`);
 
   const txData = allTransactions.map((t: Record<string, unknown>) => ({
