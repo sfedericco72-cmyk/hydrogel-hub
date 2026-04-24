@@ -111,16 +111,14 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsErr || !claimsData?.claims?.sub) {
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user?.id) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const userId = claimsData.claims.sub as string;
+    const userId = userData.user.id;
 
     // Resolve tenant + CutABC credentials from tenant_settings
     const { data: profile, error: profileErr } = await supabase
@@ -306,10 +304,8 @@ Deno.serve(async (req) => {
             Deno.env.get("SUPABASE_ANON_KEY")!,
             { global: { headers: { Authorization: authHeader } } }
           );
-          const { data: claimsData } = await userClient.auth.getClaims(
-            authHeader.replace("Bearer ", "")
-          );
-          const uid = claimsData?.claims?.sub as string | undefined;
+          const { data: u } = await userClient.auth.getUser();
+          const uid = u?.user?.id;
           if (uid) {
             const { data: p } = await supabase.from("profiles").select("tenant_id").eq("id", uid).single();
             tenantId = (p?.tenant_id as string | null) ?? null;
