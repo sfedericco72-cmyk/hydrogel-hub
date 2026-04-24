@@ -1,58 +1,49 @@
-# Arreglar carga de historia de KLAZ
+# Arreglar sincronización de KLAZ en `sync-cutabc`
 
-## Diagnóstico
+## Problema
 
-El intento de cargar **2026-03 para KLAZ** quedó trabado en estado `loading` con 0 registros. Los logs muestran que la edge function alcanzó a procesar la primera página (1000/8356) y se cortó silenciosamente.
+La sincro diaria se cuelga porque:
 
-**Causa raíz**: KLAZ tiene **mucho más volumen** que Bitec (8356 transacciones en una sola quincena vs ~500-1000 mensuales de Bitec). La edge function actual:
-- Pide todas las páginas en paralelo (`Promise.all` sobre 9 páginas → 9000 registros en memoria a la vez)
-- Procesa todo y luego upserta en chunks de 50
+1. **Volumen**: `fetchAllTransactions` pide TODO el historial de CutABC sin filtro de fecha. KLAZ tiene ~15.000 transacciones/mes (Bitec ~2.000 totales) → timeout o memoria.
+2. **Serial**: los tenants se procesan uno por uno. Si KLAZ falla, Bitec ni se ejecuta.
+3. **Sin visibilidad**: no hay logs de progreso por página, así que no se ve dónde se traba.
 
-Resultado: timeout (~150s) o muerte por memoria antes de terminar la primera quincena.
+## Cambios
 
-Además, como quedó en `loading`, el botón de "Cargar" en `/setup` no permite reintentar (la UI lo muestra como en progreso).
+### 1. Ventana de 15 días en transacciones
+En `fetchAllTransactions`, pasar `billdate_beg` con la fecha de hace 15 días (formato CutABC) en vez de string vacío. El histórico viejo ya está congelado y se carga aparte vía `backfill-cuts-history`, así que el sync diario solo necesita movimientos recientes.
 
-## Plan
+### 2. Tenants en paralelo con timeout
+Reemplazar el `for` secuencial sobre tenants por `Promise.allSettled`, envolviendo cada tenant en una promesa con timeout de 120s (`Promise.race` con `setTimeout`). Si KLAZ se cuelga o falla, Bitec sigue. El resultado final reporta éxito/fallo por tenant.
 
-**1. Liberar el período trabado** (1 query SQL)
-- Resetear `2026-03` de KLAZ de `loading` → `pending` para poder reintentar.
+### 3. Page size 100 → 500
+Subir `pagesize` en las llamadas a CutABC para reducir round-trips (de ~150 páginas a ~30 en KLAZ).
 
-**2. Robustecer `backfill-cuts-history` para volúmenes altos**
-- Procesar las páginas **secuencialmente** dentro de cada quincena (no en paralelo) para evitar pico de memoria.
-- Hacer **upsert incremental por página**: en vez de acumular 9000 registros y procesar al final, agregar al `dailyMap` y hacer flush a DB cada N páginas.
-- Reducir el tamaño de página de 1000 → 500 para acelerar la primera respuesta y reducir memoria por request.
-- Agregar logging de progreso más granular para detectar dónde se traba si vuelve a fallar.
-- Mantener la división en quincenas (ya está bien).
+### 4. Logging por página
+Agregar `console.log` con tenant + página + acumulado vs total esperado, para que si vuelve a fallar veamos exactamente en qué página/tenant.
 
-**3. Detección automática de "loading" zombie**
-- En la UI (`Setup.tsx` o el hook `useBackfillHistory`), considerar como "reintenable" cualquier período en `loading` cuyo `started_at` sea de hace más de 5 minutos (claramente murió). Mostrarlo con un ícono de warning + botón "Reintentar" en lugar de "En progreso".
+## Lo que NO toco
 
-**4. Reintentar 2026-03 KLAZ**
-- Después de deployar, vos disparás manualmente el botón "Cargar" desde `/setup` con el usuario de KLAZ logueado, y verifico los logs.
+- `backfill-cuts-history` (histórico)
+- Lógica de `daily_cuts` / cierre del día
+- Cron schedule
+- DB / migraciones
+- UI
 
-## Lo que NO se toca
+## Detalles técnicos
 
-- El tenant Bitec y sus 10 períodos ya cargados quedan intactos.
-- La estructura de tablas y RLS no cambia (la migración del turno anterior ya quedó bien).
-- La UI general de `/setup` sigue igual; solo el manejo del estado "loading zombie".
+- Archivo único: `supabase/functions/sync-cutabc/index.ts`
+- Formato fecha CutABC: el mismo que ya usa el código (revisar helper existente).
+- Timeout pattern:
+  ```ts
+  const withTimeout = <T>(p: Promise<T>, ms: number, label: string) =>
+    Promise.race([
+      p,
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`Timeout ${label}`)), ms))
+    ]);
+  ```
+- Resultado: array `{ tenant, status: 'ok'|'error', error?, counts }` devuelto al caller.
 
-## Detalle técnico
+## Pregunta abierta
 
-**SQL de desbloqueo**:
-```sql
-UPDATE cuts_history_backfill 
-SET status = 'pending', started_at = NULL, records_loaded = 0
-WHERE period = '2026-03' AND tenant_id = 'a18d13ac-dc92-4059-80cc-06d7b91fedb3';
-```
-
-**Cambios en `backfill-cuts-history/index.ts`**:
-- `fetchAllPages` → reemplazada por un loop secuencial que devuelve un async iterator (o callback) para procesar página por página.
-- Mover la lógica de "Consume → dailyMap" dentro del loop de páginas.
-- Hacer flush del `dailyMap` parcial a `device_cuts_history` cada 3 páginas (~1500 transacciones), o al terminar cada quincena.
-- Page size: 500 en lugar de 1000.
-
-**Cambios en UI** (`useBackfillHistory.ts` o `Setup.tsx`):
-- Helper `isStaleLoading(row)`: `row.status === 'loading' && row.started_at && (Date.now() - new Date(row.started_at).getTime()) > 5 * 60 * 1000`.
-- Si `isStaleLoading`, tratar el período como reintentable con badge de warning ("Carga interrumpida — Reintentar").
-
-**Deploy**: `backfill-cuts-history` se redeploya automáticamente.
+Ventana de 15 días ¿está bien? Alternativas: 7 días (más rápido, menos margen) o 30 días (más colchón si el cron falla varios días seguidos).
