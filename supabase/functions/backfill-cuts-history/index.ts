@@ -35,14 +35,15 @@ async function fetchPage(
   from: string,
   to: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  branna: string,
 ): Promise<{ items: Record<string, unknown>[]; reccnt: number }> {
   const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
     body: new URLSearchParams({
       itemno: "fixbalaqty",
-      data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
+      data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: branna }, { fixno: "" }]),
       pageindex: String(page),
       pagesize: String(pageSize),
     }),
@@ -118,6 +119,24 @@ Deno.serve(async (req) => {
       cutabc_username: settings.cutabc_username as string,
       cutabc_password: settings.cutabc_password as string,
     };
+
+    // Auto-discover brannas from already-synced devices for this tenant.
+    // CutABC partitions data by branna and hides per-device "Consume" rows
+    // when no branna filter is provided. We iterate by branna to capture them.
+    const { data: brannaRows } = await supabase
+      .from("devices")
+      .select("customer_name")
+      .eq("tenant_id", tenantId)
+      .not("customer_name", "is", null);
+    const brannas = Array.from(
+      new Set(
+        ((brannaRows || []) as { customer_name: string | null }[])
+          .map((r) => (r.customer_name || "").trim())
+          .filter((b) => b.length > 0),
+      ),
+    );
+    const brannaTargets = brannas.length > 0 ? brannas : [""];
+    console.log(`[${tenantId}] Backfill brannas: [${brannaTargets.join(", ")}]`);
 
     const { period } = await req.json();
     if (!period || !/^\d{4}-\d{2}$/.test(period)) {
@@ -210,20 +229,21 @@ Deno.serve(async (req) => {
     }
 
     for (const range of ranges) {
-      // First page reveals total record count for this half
-      const first = await fetchPage(sessionId, range.from, range.to, 1, PAGE_SIZE);
-      const expectedHere = first.reccnt;
-      totalExpected += expectedHere;
-      console.log(`  [${range.from}→${range.to}] Page 1: ${first.items.length}/${expectedHere}`);
-      ingestPage(first.items);
-      totalFetched += first.items.length;
+      for (const branna of brannaTargets) {
+        const first = await fetchPage(sessionId, range.from, range.to, 1, PAGE_SIZE, branna);
+        const expectedHere = first.reccnt;
+        totalExpected += expectedHere;
+        console.log(`  [${range.from}→${range.to}][${branna || "*"}] Page 1: ${first.items.length}/${expectedHere}`);
+        ingestPage(first.items);
+        totalFetched += first.items.length;
 
-      const totalPages = Math.ceil(expectedHere / PAGE_SIZE);
-      for (let p = 2; p <= totalPages; p++) {
-        const next = await fetchPage(sessionId, range.from, range.to, p, PAGE_SIZE);
-        console.log(`  [${range.from}→${range.to}] Page ${p}: ${next.items.length}`);
-        ingestPage(next.items);
-        totalFetched += next.items.length;
+        const totalPages = Math.ceil(expectedHere / PAGE_SIZE);
+        for (let p = 2; p <= totalPages; p++) {
+          const next = await fetchPage(sessionId, range.from, range.to, p, PAGE_SIZE, branna);
+          console.log(`  [${range.from}→${range.to}][${branna || "*"}] Page ${p}: ${next.items.length}`);
+          ingestPage(next.items);
+          totalFetched += next.items.length;
+        }
       }
     }
 
