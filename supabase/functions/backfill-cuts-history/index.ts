@@ -290,7 +290,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Backfill error:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("Backfill error:", errMsg);
     try {
       const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const body = await req.clone().json().catch(() => ({}));
@@ -315,14 +316,14 @@ Deno.serve(async (req) => {
       if (body.period && tenantId) {
         await supabase
           .from("cuts_history_backfill")
-          .update({ status: "error", error_message: error.message })
+          .update({ status: "error", error_message: errMsg })
           .eq("period", body.period)
           .eq("tenant_id", tenantId);
       }
     } catch (_) { /* ignore */ }
 
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errMsg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
