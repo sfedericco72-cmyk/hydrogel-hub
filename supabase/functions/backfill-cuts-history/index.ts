@@ -68,14 +68,17 @@ async function runBackfill(
   const from = `${period}-01`;
   const to = `${period}-${String(endDay).padStart(2, "0")}`;
 
-  // Split into two halves (CutABC slows down on big ranges).
+  // Split into two halves (CutABC slows down on big ranges). Skip the second
+  // half if the month in progress hasn't reached the midpoint yet.
   const mid = 15;
-  const ranges = [
-    { from, to: `${period}-${String(mid).padStart(2, "0")}` },
-    { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
-  ];
+  const ranges = endDay <= mid
+    ? [{ from, to }]
+    : [
+        { from, to: `${period}-${String(mid).padStart(2, "0")}` },
+        { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
+      ];
 
-  console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
+  console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${endDay}/${lastDay} days, ${ranges.length} half/halves)`);
 
   const sessionId = await loginCutABC(creds);
 
