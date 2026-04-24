@@ -4,6 +4,7 @@ import WelcomeBanner from "@/components/WelcomeBanner";
 import { Building2, Search, RefreshCw, ChevronDown, ChevronRight, Clock, Activity, WifiOff, Package, TrendingUp, Settings, MapPin, AlertTriangle, LogOut, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useMemo, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
 import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
@@ -26,6 +27,7 @@ function formatSyncDate(dateStr: string | null) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
 
   // Persisted defaults: stateFilter="active", clientFilter="all", clientsExpanded=false.
   // URL params take precedence over sessionStorage so deep links keep working.
@@ -196,6 +198,16 @@ export default function Dashboard() {
       const { data, error } = await supabase.functions.invoke("sync-cutabc", { method: "POST" });
       if (error) throw error;
       toast.success(`Sincronización completa: ${data.active_synced} dispositivos actualizados`);
+      // Refresh every cache that depends on devices / cuts so the dashboard
+      // and detail views stay consistent after a manual sync.
+      queryClient.invalidateQueries({ queryKey: ["devices"] });
+      queryClient.invalidateQueries({ queryKey: ["assigned-hierarchy"] });
+      queryClient.invalidateQueries({ queryKey: ["cuts-history"] });
+      queryClient.invalidateQueries({ queryKey: ["last-cut-dates"] });
+      queryClient.invalidateQueries({ queryKey: ["avg-daily-cuts"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-cuts-map"] });
+      queryClient.invalidateQueries({ queryKey: ["assignment-cuts"] });
+      queryClient.invalidateQueries({ queryKey: ["equipment-sales"] });
     } catch (e: any) {
       toast.error("Error al sincronizar: " + e.message);
     } finally {
