@@ -7,6 +7,25 @@ const corsHeaders = {
 
 const CUTABC_BASE = "http://www.cutabc.cn:8091/cut_app/app";
 
+const SYNC_WINDOW_DAYS = 15;
+const TENANT_TIMEOUT_MS = 120_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); })
+     .catch((e) => { clearTimeout(t); reject(e); });
+  });
+}
+
+function cutabcDate(d: Date): string {
+  // CutABC expects "YYYY-MM-DD" based on existing usage of billdate strings.
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 interface CutABCDevice {
   fixno: string;
   fixna: string;
@@ -53,7 +72,7 @@ async function loginCutABC(creds: TenantCredentials): Promise<string> {
 async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
   const allDevices: CutABCDevice[] = [];
   let pageIndex = 1;
-  const pageSize = 100;
+  const pageSize = 500;
 
   while (true) {
     const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
@@ -74,17 +93,28 @@ async function fetchAllDevices(sessionId: string): Promise<CutABCDevice[]> {
     if (data.success !== "1" || !data.listTask) break;
 
     allDevices.push(...data.listTask);
-    if (allDevices.length >= parseInt(data.reccnt)) break;
+    const total = parseInt(data.reccnt) || allDevices.length;
+    console.log(`  devices page ${pageIndex}: ${allDevices.length}/${total}`);
+    if (allDevices.length >= total) break;
     pageIndex++;
   }
 
   return allDevices;
 }
 
-async function fetchAllTransactions(sessionId: string): Promise<Record<string, unknown>[]> {
+async function fetchAllTransactions(
+  sessionId: string,
+  tenantLabel: string,
+): Promise<Record<string, unknown>[]> {
   const allTx: Record<string, unknown>[] = [];
   let pageIndex = 1;
-  const pageSize = 100;
+  const pageSize = 500;
+
+  // Only fetch the last SYNC_WINDOW_DAYS days. Older history is loaded via backfill-cuts-history.
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - SYNC_WINDOW_DAYS);
+  const billdateBeg = cutabcDate(since);
+  console.log(`[${tenantLabel}] Tx window: from ${billdateBeg} (last ${SYNC_WINDOW_DAYS}d)`);
 
   while (true) {
     const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
@@ -96,7 +126,7 @@ async function fetchAllTransactions(sessionId: string): Promise<Record<string, u
       body: new URLSearchParams({
         itemno: "custbalaqry",
         data: JSON.stringify([
-          { billdate_beg: "" },
+          { billdate_beg: billdateBeg },
           { billdate_end: "" },
           { branna: "" },
           { fixno: "" },
@@ -110,7 +140,9 @@ async function fetchAllTransactions(sessionId: string): Promise<Record<string, u
     if (data.success !== "1" || !data.listTask) break;
 
     allTx.push(...data.listTask);
-    if (allTx.length >= parseInt(data.reccnt)) break;
+    const total = parseInt(data.reccnt) || allTx.length;
+    console.log(`[${tenantLabel}] Tx page ${pageIndex}: ${allTx.length}/${total}`);
+    if (allTx.length >= total) break;
     pageIndex++;
   }
 
@@ -208,7 +240,7 @@ async function syncTenant(
 
   // Sync transactions
   console.log(`[${tenantId}] Fetching transactions...`);
-  const allTransactions = await fetchAllTransactions(sessionId);
+  const allTransactions = await fetchAllTransactions(sessionId, tenantId);
   console.log(`[${tenantId}] Fetched ${allTransactions.length} transactions`);
 
   const txData = allTransactions.map((t: Record<string, unknown>) => ({
@@ -281,16 +313,27 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${tenantSettings.length} tenant(s) to sync`);
 
-    const results = [];
-    for (const ts of tenantSettings) {
-      try {
-        const result = await syncTenant(supabase, ts as TenantCredentials);
-        results.push(result);
-      } catch (error: any) {
-        console.error(`Error syncing tenant ${ts.tenant_id}: ${error.message}`);
-        results.push({ tenant_id: ts.tenant_id, error: error.message });
+    // Process tenants in parallel with a per-tenant timeout so one slow/failing
+    // tenant does not block the rest.
+    const settled = await Promise.allSettled(
+      tenantSettings.map((ts) =>
+        withTimeout(
+          syncTenant(supabase, ts as TenantCredentials),
+          TENANT_TIMEOUT_MS,
+          `tenant ${ts.tenant_id}`,
+        ),
+      ),
+    );
+
+    const results = settled.map((r, i) => {
+      const tenantId = (tenantSettings[i] as TenantCredentials).tenant_id;
+      if (r.status === "fulfilled") {
+        return { ...r.value, status: "ok" as const };
       }
-    }
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      console.error(`Error syncing tenant ${tenantId}: ${msg}`);
+      return { tenant_id: tenantId, status: "error" as const, error: msg };
+    });
 
     return new Response(
       JSON.stringify({
