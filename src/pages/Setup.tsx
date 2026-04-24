@@ -326,10 +326,11 @@ function BackfillSection() {
   const runBackfill = useRunBackfill();
   const [loadingPeriod, setLoadingPeriod] = useState<string | null>(null);
 
-  // Generate last 12 months
+  // Last 13 months including the current one. The current month can be
+  // backfilled too — the API just returns up to today.
   const months: string[] = [];
   const now = new Date();
-  for (let i = 1; i <= 12; i++) {
+  for (let i = 0; i <= 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(d.toISOString().substring(0, 7));
   }
