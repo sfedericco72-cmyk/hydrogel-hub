@@ -136,22 +136,55 @@ async function runBackfill(
   if (dupes > 0) console.log(`Removed ${dupes} duplicates by billno`);
   console.log(`Consume: ${consumeCount}, Other: ${otherCount}, Daily records: ${dailyMap.size}`);
 
-  // Flush dailyMap to device_cuts_history
-  const rows = Array.from(dailyMap.values()).map((d) => ({
-    fixno: d.fixno,
-    cut_date: d.date,
-    total_cuts: 0,
-    daily_cuts: d.cuts,
+  // Decide whether this period needs daily detail (within 90-day window) or
+  // only monthly aggregate. Periods older than ~3 months are stored only as
+  // monthly totals to keep device_cuts_daily small.
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+  const needsDaily = new Date(`${period}-${String(endDay).padStart(2, "0")}T00:00:00Z`) >= cutoff;
+
+  // Always upsert the monthly aggregate
+  const monthlyTotal = Array.from(dailyMap.values())
+    .reduce<Map<string, number>>((acc, d) => {
+      acc.set(d.fixno, (acc.get(d.fixno) ?? 0) + d.cuts);
+      return acc;
+    }, new Map());
+
+  const monthlyRows = Array.from(monthlyTotal.entries()).map(([fixno, total_cuts]) => ({
     tenant_id: tenantId,
+    fixno,
+    year_month: period,
+    total_cuts,
   }));
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += 100) {
-    const chunk = rows.slice(i, i + 100);
+
+  for (let i = 0; i < monthlyRows.length; i += 100) {
+    const chunk = monthlyRows.slice(i, i + 100);
     const { error } = await supabase
-      .from("device_cuts_history")
-      .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
-    if (error) throw new Error(`Upsert failed: ${error.message}`);
-    inserted += chunk.length;
+      .from("device_cuts_monthly")
+      .upsert(chunk, { onConflict: "tenant_id,fixno,year_month" });
+    if (error) throw new Error(`Monthly upsert failed: ${error.message}`);
+  }
+
+  let inserted = 0;
+  if (needsDaily) {
+    const rows = Array.from(dailyMap.values()).map((d) => ({
+      fixno: d.fixno,
+      cut_date: d.date,
+      total_cuts: 0,
+      daily_cuts: d.cuts,
+      tenant_id: tenantId,
+    }));
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100);
+      const { error } = await supabase
+        .from("device_cuts_daily")
+        .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
+      if (error) throw new Error(`Daily upsert failed: ${error.message}`);
+      inserted += chunk.length;
+    }
+  } else {
+    inserted = monthlyRows.length;
+    console.log(`  Period ${period} older than 90d → only monthly aggregate (${monthlyRows.length} devices)`);
   }
 
   await supabase
@@ -166,7 +199,7 @@ async function runBackfill(
     .eq("tenant_id", tenantId);
 
   console.log(
-    `[${tenantId}] Backfill ${period} complete: ${inserted} daily records, ` +
+    `[${tenantId}] Backfill ${period} complete: ${inserted} ${needsDaily ? "daily" : "monthly"} records, ` +
     `${consumeCount} consumes, ${otherCount} other, ${dupes} dupes, expected=${totalExpected}, fetched=${totalFetched}`,
   );
 }

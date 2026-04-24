@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       }
 
       const { data: history } = await supabase
-        .from('device_cuts_history')
+        .from('device_cuts_daily')
         .select('daily_cuts')
         .eq('fixno', device.fixno)
         .order('cut_date', { ascending: false })
