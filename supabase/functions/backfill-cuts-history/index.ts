@@ -152,81 +152,85 @@ Deno.serve(async (req) => {
 
     const sessionId = await loginCutABC(creds);
 
-    // Fetch both halves
-    let totalExpected = 0;
-    const allTransactions: Record<string, unknown>[] = [];
-    for (const range of ranges) {
-      const result = await fetchAllPages(sessionId, range.from, range.to);
-      allTransactions.push(...result.transactions);
-      totalExpected += result.expected;
-    }
-
-    console.log(`Fetched ${allTransactions.length} transactions (expected ${totalExpected})`);
-
-    // Deduplicate by billno
+    // Streaming: fetch page-by-page, aggregate Consume into a single dailyMap
+    // for the full period, dedupe by billno across all pages, and upsert
+    // incrementally to avoid timeouts/memory pressure on large months.
+    const PAGE_SIZE = 500;
     const seen = new Set<string>();
-    const uniqueTransactions: Record<string, unknown>[] = [];
-    let dupes = 0;
-    for (const tx of allTransactions) {
-      const billno = tx.billno as string;
-      if (!billno || seen.has(billno)) {
-        dupes++;
-        continue;
-      }
-      seen.add(billno);
-      uniqueTransactions.push(tx);
-    }
-    if (dupes > 0) console.log(`Removed ${dupes} duplicates by billno`);
-
-    // Separate Consume vs other types
+    const dailyMap = new Map<string, { fixno: string; date: string; cuts: number }>();
+    let totalFetched = 0;
+    let totalExpected = 0;
     let consumeCount = 0;
     let otherCount = 0;
-    const dailyMap = new Map<string, { fixno: string; date: string; cuts: number }>();
+    let dupes = 0;
 
-    for (const tx of uniqueTransactions) {
-      const kind = ((tx.balakindna2 as string) || "").trim();
-      if (kind !== "Consume") {
-        otherCount++;
-        continue;
+    async function flushDailyMap() {
+      if (dailyMap.size === 0) return 0;
+      const rows = Array.from(dailyMap.values()).map((d) => ({
+        fixno: d.fixno,
+        cut_date: d.date,
+        total_cuts: 0,
+        daily_cuts: d.cuts,
+        tenant_id: tenantId,
+      }));
+      let written = 0;
+      for (let i = 0; i < rows.length; i += 100) {
+        const chunk = rows.slice(i, i + 100);
+        const { error } = await supabase
+          .from("device_cuts_history")
+          .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
+        if (error) throw new Error(`Upsert failed: ${error.message}`);
+        written += chunk.length;
       }
-      consumeCount++;
+      dailyMap.clear();
+      return written;
+    }
 
-      const fixno = tx.fixno as string;
-      const billdate = tx.billdate as string;
-      if (!fixno || !billdate) continue;
+    function ingestPage(items: Record<string, unknown>[]) {
+      for (const tx of items) {
+        const billno = tx.billno as string;
+        if (!billno || seen.has(billno)) { dupes++; continue; }
+        seen.add(billno);
 
-      const date = billdate.substring(0, 10);
-      const key = `${fixno}|${date}`;
-      const qty = parseInt(tx.busiqty2 as string) || 1;
+        const kind = ((tx.balakindna2 as string) || "").trim();
+        if (kind !== "Consume") { otherCount++; continue; }
+        consumeCount++;
 
-      const existing = dailyMap.get(key);
-      if (existing) {
-        existing.cuts += qty;
-      } else {
-        dailyMap.set(key, { fixno, date, cuts: qty });
+        const fixno = tx.fixno as string;
+        const billdate = tx.billdate as string;
+        if (!fixno || !billdate) continue;
+
+        const date = billdate.substring(0, 10);
+        const key = `${fixno}|${date}`;
+        const qty = parseInt(tx.busiqty2 as string) || 1;
+        const existing = dailyMap.get(key);
+        if (existing) existing.cuts += qty;
+        else dailyMap.set(key, { fixno, date, cuts: qty });
       }
     }
 
+    for (const range of ranges) {
+      // First page reveals total record count for this half
+      const first = await fetchPage(sessionId, range.from, range.to, 1, PAGE_SIZE);
+      const expectedHere = first.reccnt;
+      totalExpected += expectedHere;
+      console.log(`  [${range.from}→${range.to}] Page 1: ${first.items.length}/${expectedHere}`);
+      ingestPage(first.items);
+      totalFetched += first.items.length;
+
+      const totalPages = Math.ceil(expectedHere / PAGE_SIZE);
+      for (let p = 2; p <= totalPages; p++) {
+        const next = await fetchPage(sessionId, range.from, range.to, p, PAGE_SIZE);
+        console.log(`  [${range.from}→${range.to}] Page ${p}: ${next.items.length}`);
+        ingestPage(next.items);
+        totalFetched += next.items.length;
+      }
+    }
+
+    if (dupes > 0) console.log(`Removed ${dupes} duplicates by billno`);
     console.log(`Consume: ${consumeCount}, Other: ${otherCount}, Daily records: ${dailyMap.size}`);
 
-    const historyData = Array.from(dailyMap.values()).map((d) => ({
-      fixno: d.fixno,
-      cut_date: d.date,
-      total_cuts: 0,
-      daily_cuts: d.cuts,
-      tenant_id: tenantId,
-    }));
-
-    // Upsert in chunks
-    let inserted = 0;
-    for (let i = 0; i < historyData.length; i += 50) {
-      const chunk = historyData.slice(i, i + 50);
-      const { error } = await supabase
-        .from("device_cuts_history")
-        .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
-      if (error) throw new Error(`Upsert failed: ${error.message}`);
-      inserted += chunk.length;
-    }
+    const inserted = await flushDailyMap();
 
     // Mark as done
     await supabase
@@ -244,13 +248,13 @@ Deno.serve(async (req) => {
       success: true,
       period,
       tenant_id: tenantId,
-      total_transactions: uniqueTransactions.length,
+      total_transactions: totalFetched - dupes,
       expected_transactions: totalExpected,
       consume_transactions: consumeCount,
       other_transactions: otherCount,
       duplicates_removed: dupes,
       daily_records: inserted,
-      complete: uniqueTransactions.length >= totalExpected,
+      complete: (totalFetched - dupes) >= totalExpected,
     };
     console.log(`[${tenantId}] Backfill complete:`, JSON.stringify(summary));
 
