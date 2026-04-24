@@ -53,6 +53,118 @@ async function fetchPage(
   return { items, reccnt };
 }
 
+async function runBackfill(
+  supabase: ReturnType<typeof createClient>,
+  creds: TenantCredentials,
+  tenantId: string,
+  period: string,
+): Promise<void> {
+  // Full month range
+  const [year, month] = period.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  const from = `${period}-01`;
+  const to = `${period}-${String(lastDay).padStart(2, "0")}`;
+
+  // Split into two halves (CutABC slows down on big ranges).
+  const mid = 15;
+  const ranges = [
+    { from, to: `${period}-${String(mid).padStart(2, "0")}` },
+    { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
+  ];
+
+  console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
+
+  const sessionId = await loginCutABC(creds);
+
+  // fixbalaqty returns ALL transactions for the user (it ignores the branna
+  // filter). One pass per half-month is enough — no need to iterate by branna.
+  const PAGE_SIZE = 500;
+  const seen = new Set<string>();
+  const dailyMap = new Map<string, { fixno: string; date: string; cuts: number }>();
+  let totalFetched = 0;
+  let totalExpected = 0;
+  let consumeCount = 0;
+  let otherCount = 0;
+  let dupes = 0;
+
+  function ingestPage(items: Record<string, unknown>[]) {
+    for (const tx of items) {
+      const billno = tx.billno as string;
+      if (!billno || seen.has(billno)) { dupes++; continue; }
+      seen.add(billno);
+
+      const kind = ((tx.balakindna2 as string) || "").trim();
+      if (kind !== "Consume") { otherCount++; continue; }
+      consumeCount++;
+
+      const fixno = tx.fixno as string;
+      const billdate = tx.billdate as string;
+      if (!fixno || !billdate) continue;
+
+      const date = billdate.substring(0, 10);
+      const key = `${fixno}|${date}`;
+      const qty = parseInt(tx.busiqty2 as string) || 1;
+      const existing = dailyMap.get(key);
+      if (existing) existing.cuts += qty;
+      else dailyMap.set(key, { fixno, date, cuts: qty });
+    }
+  }
+
+  for (const range of ranges) {
+    const first = await fetchPage(sessionId, range.from, range.to, 1, PAGE_SIZE);
+    const expectedHere = first.reccnt;
+    totalExpected += expectedHere;
+    console.log(`  [${range.from}→${range.to}] Page 1: ${first.items.length}/${expectedHere}`);
+    ingestPage(first.items);
+    totalFetched += first.items.length;
+
+    const totalPages = Math.ceil(expectedHere / PAGE_SIZE);
+    for (let p = 2; p <= totalPages; p++) {
+      const next = await fetchPage(sessionId, range.from, range.to, p, PAGE_SIZE);
+      console.log(`  [${range.from}→${range.to}] Page ${p}: ${next.items.length}`);
+      ingestPage(next.items);
+      totalFetched += next.items.length;
+    }
+  }
+
+  if (dupes > 0) console.log(`Removed ${dupes} duplicates by billno`);
+  console.log(`Consume: ${consumeCount}, Other: ${otherCount}, Daily records: ${dailyMap.size}`);
+
+  // Flush dailyMap to device_cuts_history
+  const rows = Array.from(dailyMap.values()).map((d) => ({
+    fixno: d.fixno,
+    cut_date: d.date,
+    total_cuts: 0,
+    daily_cuts: d.cuts,
+    tenant_id: tenantId,
+  }));
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += 100) {
+    const chunk = rows.slice(i, i + 100);
+    const { error } = await supabase
+      .from("device_cuts_history")
+      .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
+    if (error) throw new Error(`Upsert failed: ${error.message}`);
+    inserted += chunk.length;
+  }
+
+  await supabase
+    .from("cuts_history_backfill")
+    .update({
+      status: "done",
+      records_loaded: inserted,
+      completed_at: new Date().toISOString(),
+      error_message: null,
+    })
+    .eq("period", period)
+    .eq("tenant_id", tenantId);
+
+  console.log(
+    `[${tenantId}] Backfill ${period} complete: ${inserted} daily records, ` +
+    `${consumeCount} consumes, ${otherCount} other, ${dupes} dupes, expected=${totalExpected}, fetched=${totalFetched}`,
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
