@@ -1,5 +1,5 @@
 import { sendLovableEmail } from 'npm:@lovable.dev/email-js'
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
 const MAX_RETRIES = 5
 const DEFAULT_BATCH_SIZE = 10
@@ -54,14 +54,14 @@ function parseJwtClaims(token: string): Record<string, unknown> | null {
 
 // Move a message to the dead letter queue and log the reason.
 async function moveToDlq(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   queue: string,
   msg: { msg_id: number; message: Record<string, unknown> },
   reason: string
 ): Promise<void> {
   const payload = msg.message
   if (payload.skip_log !== true) {
-    await supabase.from('email_send_log').insert({
+    await (supabase.from('email_send_log') as any).insert({
       message_id: payload.message_id,
       template_name: (payload.label || queue) as string,
       recipient_email: payload.to,
@@ -70,7 +70,7 @@ async function moveToDlq(
       metadata: (payload.metadata ?? null) as Record<string, unknown> | null,
     })
   }
-  const { error } = await supabase.rpc('move_to_dlq', {
+  const { error } = await (supabase.rpc as any)('move_to_dlq', {
     source_queue: queue,
     dlq_name: `${queue}_dlq`,
     message_id: msg.msg_id,
@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const supabase: SupabaseClient = createClient(supabaseUrl, supabaseServiceKey)
 
   // 1. Check rate-limit cooldown and read queue config
   const { data: state } = await supabase
@@ -140,11 +140,17 @@ Deno.serve(async (req) => {
 
   // 2. Process auth_emails first (priority), then transactional_emails
   for (const queue of ['auth_emails', 'transactional_emails']) {
-    const { data: messages, error: readError } = await supabase.rpc('read_email_batch', {
+    const { data: rawMessages, error: readError } = await (supabase.rpc as any)('read_email_batch', {
       queue_name: queue,
       batch_size: batchSize,
       vt: 30,
     })
+    const messages = rawMessages as Array<{
+      msg_id: number
+      read_ct: number
+      message: Record<string, any>
+      enqueued_at?: string
+    }> | null
 
     if (readError) {
       console.error('Failed to read email batch', { queue, error: readError })
@@ -159,12 +165,12 @@ Deno.serve(async (req) => {
     const messageIds = Array.from(
       new Set(
         messages
-          .map((msg) =>
+          .map((msg: { message?: { message_id?: unknown } }) =>
             msg?.message?.message_id && typeof msg.message.message_id === 'string'
               ? msg.message.message_id
               : null
           )
-          .filter((id): id is string => Boolean(id))
+          .filter((id: string | null): id is string => Boolean(id))
       )
     )
     const failedAttemptsByMessageId = new Map<string, number>()
@@ -266,7 +272,7 @@ Deno.serve(async (req) => {
             idempotency_key: payload.idempotency_key,
             unsubscribe_token: payload.unsubscribe_token,
             message_id: payload.message_id,
-          },
+          } as any,
           // sendUrl is optional — when LOVABLE_SEND_URL is not set, the library
           // falls back to the default Lovable API endpoint (https://api.lovable.dev).
           // Set LOVABLE_SEND_URL as a Supabase secret to override (e.g. for local dev).
@@ -275,7 +281,7 @@ Deno.serve(async (req) => {
 
         // Log success (skip when payload.skip_log is true — used for shadow BCC copies)
         if (payload.skip_log !== true) {
-          await supabase.from('email_send_log').insert({
+          await (supabase.from('email_send_log') as any).insert({
             message_id: payload.message_id,
             template_name: payload.label || queue,
             recipient_email: payload.to,
@@ -285,7 +291,7 @@ Deno.serve(async (req) => {
         }
 
         // Delete from queue
-        const { error: delError } = await supabase.rpc('delete_email', {
+        const { error: delError } = await (supabase.rpc as any)('delete_email', {
           queue_name: queue,
           message_id: msg.msg_id,
         })
@@ -305,7 +311,7 @@ Deno.serve(async (req) => {
 
         if (isRateLimited(error)) {
           if (payload.skip_log !== true) {
-            await supabase.from('email_send_log').insert({
+            await (supabase.from('email_send_log') as any).insert({
               message_id: payload.message_id,
               template_name: payload.label || queue,
               recipient_email: payload.to,
@@ -345,7 +351,7 @@ Deno.serve(async (req) => {
 
         // Log non-429 failures to track real retry attempts.
         if (payload.skip_log !== true) {
-          await supabase.from('email_send_log').insert({
+          await (supabase.from('email_send_log') as any).insert({
             message_id: payload.message_id,
             template_name: payload.label || queue,
             recipient_email: payload.to,
