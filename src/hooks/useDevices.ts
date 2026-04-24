@@ -37,13 +37,13 @@ export function useDevice(id: string | undefined) {
   });
 }
 
-/** Map of fixno → last date with cuts > 0 */
+/** Map of fixno → last date with cuts > 0 (within last 90 days) */
 export function useLastCutDates() {
   return useQuery({
     queryKey: ["last-cut-dates"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("device_cuts_history")
+        .from("device_cuts_daily")
         .select("fixno, cut_date")
         .gt("daily_cuts", 0)
         .order("cut_date", { ascending: false });
@@ -69,7 +69,7 @@ export function useAvgDailyCuts() {
       const dateStr = thirtyDaysAgo.toISOString().split("T")[0];
 
       const { data, error } = await supabase
-        .from("device_cuts_history")
+        .from("device_cuts_daily")
         .select("fixno, daily_cuts")
         .gt("daily_cuts", 0)
         .gte("cut_date", dateStr);
@@ -93,7 +93,9 @@ export function useAvgDailyCuts() {
 
 /**
  * Map of fixno → Map<"YYYY-MM", totalCuts>
- * Fetches last 3 months of cuts data for all devices.
+ * Fetches last N months of cuts data for all devices from the
+ * pre-aggregated monthly table (1 row per device per month, no truncation
+ * by Supabase's 1000-row default limit).
  */
 export function useMonthlyCutsMap(months = 6) {
   return useQuery({
@@ -102,23 +104,20 @@ export function useMonthlyCutsMap(months = 6) {
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - months);
       startDate.setDate(1);
-      const dateStr = startDate.toISOString().split("T")[0];
+      const startMonth = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
 
       const { data, error } = await supabase
-        .from("device_cuts_history")
-        .select("fixno, cut_date, daily_cuts")
-        .gt("daily_cuts", 0)
-        .gte("cut_date", dateStr);
+        .from("device_cuts_monthly")
+        .select("fixno, year_month, total_cuts")
+        .gte("year_month", startMonth);
 
       if (error) throw error;
 
-      // fixno → Map<"YYYY-MM", totalCuts>
       const result = new Map<string, Map<string, number>>();
       data?.forEach((r) => {
-        const month = r.cut_date.substring(0, 7);
         if (!result.has(r.fixno)) result.set(r.fixno, new Map());
         const deviceMap = result.get(r.fixno)!;
-        deviceMap.set(month, (deviceMap.get(month) ?? 0) + (r.daily_cuts ?? 0));
+        deviceMap.set(r.year_month, (deviceMap.get(r.year_month) ?? 0) + (r.total_cuts ?? 0));
       });
       return result;
     },

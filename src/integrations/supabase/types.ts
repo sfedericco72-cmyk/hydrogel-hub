@@ -197,7 +197,37 @@ export type Database = {
           },
         ]
       }
-      device_cuts_history: {
+      device_cuts_daily: {
+        Row: {
+          created_at: string
+          cut_date: string
+          daily_cuts: number
+          fixno: string
+          id: string
+          tenant_id: string | null
+          total_cuts: number
+        }
+        Insert: {
+          created_at?: string
+          cut_date: string
+          daily_cuts?: number
+          fixno: string
+          id?: string
+          tenant_id?: string | null
+          total_cuts?: number
+        }
+        Update: {
+          created_at?: string
+          cut_date?: string
+          daily_cuts?: number
+          fixno?: string
+          id?: string
+          tenant_id?: string | null
+          total_cuts?: number
+        }
+        Relationships: []
+      }
+      device_cuts_history_legacy: {
         Row: {
           created_at: string
           cut_date: string
@@ -234,6 +264,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      device_cuts_monthly: {
+        Row: {
+          created_at: string
+          fixno: string
+          id: string
+          tenant_id: string | null
+          total_cuts: number
+          updated_at: string
+          year_month: string
+        }
+        Insert: {
+          created_at?: string
+          fixno: string
+          id?: string
+          tenant_id?: string | null
+          total_cuts?: number
+          updated_at?: string
+          year_month: string
+        }
+        Update: {
+          created_at?: string
+          fixno?: string
+          id?: string
+          tenant_id?: string | null
+          total_cuts?: number
+          updated_at?: string
+          year_month?: string
+        }
+        Relationships: []
       }
       device_transactions: {
         Row: {

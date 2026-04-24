@@ -6,7 +6,7 @@ import {
   Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw
 } from "lucide-react";
 import { useDevice, useLastCutDates, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, getDisconnectionDays, ACTIVITY_LABELS } from "@/hooks/useDevices";
-import { useCutsHistory } from "@/hooks/useCutsHistory";
+import { useCutsHistory, useMonthlyCuts } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -97,11 +97,36 @@ function aggregateHistory(
   return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
+function aggregateMonthly(
+  monthly: { year_month: string; total_cuts: number }[],
+  resolution: TimeResolution,
+  startDate?: string | null,
+): ChartPoint[] {
+  const startMonth = startDate ? startDate.slice(0, 7) : null;
+  const map = new Map<string, ChartPoint>();
+  for (const r of monthly) {
+    if (startMonth && r.year_month < startMonth) continue;
+    let key: string;
+    let label: string;
+    if (resolution === "annual") {
+      key = r.year_month.slice(0, 4);
+      label = key;
+    } else {
+      key = r.year_month;
+      label = getMonthLabel(r.year_month);
+    }
+    if (!map.has(key)) map.set(key, { key, label, totalCuts: 0 });
+    map.get(key)!.totalCuts += r.total_cuts ?? 0;
+  }
+  return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
 export default function BranchDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: device, isLoading } = useDevice(id);
   const { data: history = [] } = useCutsHistory(device?.fixno);
+  const { data: monthlyHistory = [] } = useMonthlyCuts(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
   const { data: lastCutDates } = useLastCutDates();
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
@@ -130,12 +155,34 @@ export default function BranchDetail() {
     return history.filter(r => r.cut_date >= assignmentStartDate);
   }, [history, assignmentStartDate]);
 
-  const chartData = useMemo(() => aggregateHistory(history, resolution, assignmentStartDate), [history, resolution, assignmentStartDate]);
+  // For weekly resolution use daily data (covers last 90 days, fine for last 3 months).
+  // For monthly/annual use the pre-aggregated monthly table (full history).
+  const chartData = useMemo(() => {
+    if (resolution === "weekly") {
+      return aggregateHistory(history, "weekly", assignmentStartDate);
+    }
+    return aggregateMonthly(monthlyHistory, resolution, assignmentStartDate);
+  }, [history, monthlyHistory, resolution, assignmentStartDate]);
 
-  // Cortes totales = sum of daily_cuts since assignment
+  // Cortes totales since assignment: combine monthly (full months) + daily
+  // (partial start month + daily window). Simpler approximation: sum monthly
+  // from assignment start month onward + the partial start of the assignment
+  // month from daily, minus the days before assignment in that month.
   const totalCutsSinceAssignment = useMemo(() => {
-    return filteredHistory.reduce((sum, r) => sum + (r.daily_cuts ?? 0), 0);
-  }, [filteredHistory]);
+    if (!assignmentStartDate) {
+      return monthlyHistory.reduce((s, r) => s + (r.total_cuts ?? 0), 0);
+    }
+    const startMonth = assignmentStartDate.slice(0, 7);
+    // Sum all months at-or-after the start month
+    const monthlySum = monthlyHistory
+      .filter(r => r.year_month > startMonth)
+      .reduce((s, r) => s + (r.total_cuts ?? 0), 0);
+    // For the start month, use daily data filtered by assignment date
+    const startMonthDailySum = filteredHistory
+      .filter(r => r.cut_date.slice(0, 7) === startMonth)
+      .reduce((s, r) => s + (r.daily_cuts ?? 0), 0);
+    return monthlySum + startMonthDailySum;
+  }, [monthlyHistory, filteredHistory, assignmentStartDate]);
 
   // Filter monthlyCutsMap for traffic lights
   const filteredMonthlyCuts = useMemo(() => {

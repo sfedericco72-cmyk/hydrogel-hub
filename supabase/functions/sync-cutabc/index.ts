@@ -236,7 +236,7 @@ async function syncTenant(
 
   const fixnos = allDevices.map((d) => d.fixno);
   const { data: yesterdayData } = await supabase
-    .from("device_cuts_history")
+    .from("device_cuts_daily")
     .select("fixno, total_cuts")
     .eq("cut_date", yesterdayStr)
     .in("fixno", fixnos);
@@ -263,12 +263,48 @@ async function syncTenant(
     for (let i = 0; i < historyData.length; i += 50) {
       const chunk = historyData.slice(i, i + 50);
       const { error } = await supabase
-        .from("device_cuts_history")
+        .from("device_cuts_daily")
         .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
       if (error) console.error(`[${tenantId}] History upsert error: ${error.message}`);
     }
   }
   console.log(`[${tenantId}] Saved ${historyData.length} daily snapshots for ${today}`);
+
+  // Increment monthly aggregate for the current month with today's daily_cuts.
+  // We re-fetch the canonical monthly total from device_cuts_daily (current
+  // month-to-date) instead of doing a += because the same day may sync
+  // multiple times — using a sum from daily is idempotent.
+  const yearMonth = today.substring(0, 7);
+  const monthStart = `${yearMonth}-01`;
+  const { data: mtdData } = await supabase
+    .from("device_cuts_daily")
+    .select("fixno, daily_cuts")
+    .eq("tenant_id", tenantId)
+    .gte("cut_date", monthStart)
+    .gt("daily_cuts", 0);
+
+  const mtdMap = new Map<string, number>();
+  (mtdData ?? []).forEach((r: any) => {
+    mtdMap.set(r.fixno, (mtdMap.get(r.fixno) ?? 0) + (r.daily_cuts ?? 0));
+  });
+
+  const monthlyRows = Array.from(mtdMap.entries()).map(([fixno, total_cuts]) => ({
+    tenant_id: tenantId,
+    fixno,
+    year_month: yearMonth,
+    total_cuts,
+  }));
+
+  if (monthlyRows.length > 0) {
+    for (let i = 0; i < monthlyRows.length; i += 100) {
+      const chunk = monthlyRows.slice(i, i + 100);
+      const { error } = await supabase
+        .from("device_cuts_monthly")
+        .upsert(chunk, { onConflict: "tenant_id,fixno,year_month" });
+      if (error) console.error(`[${tenantId}] Monthly upsert error: ${error.message}`);
+    }
+    console.log(`[${tenantId}] Updated ${monthlyRows.length} monthly aggregates for ${yearMonth}`);
+  }
 
   // Sync transactions
   console.log(`[${tenantId}] Fetching transactions...`);
