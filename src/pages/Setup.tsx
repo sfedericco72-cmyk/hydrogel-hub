@@ -336,6 +336,14 @@ function BackfillSection() {
 
   const statusMap = new Map(records.map(r => [r.period, r]));
 
+  // A period stuck in "loading" for >5 min is almost certainly a dead run
+  // (Edge Function timed out). Treat it as retryable so the user is not blocked.
+  function isStaleLoading(record: { status?: string; started_at?: string | null } | undefined) {
+    if (!record || record.status !== "loading" || !record.started_at) return false;
+    const ageMs = Date.now() - new Date(record.started_at).getTime();
+    return ageMs > 5 * 60 * 1000;
+  }
+
   async function handleBackfill(period: string) {
     setLoadingPeriod(period);
     try {
@@ -366,7 +374,10 @@ function BackfillSection() {
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {months.map(period => {
             const record = statusMap.get(period);
-            const status = record?.status;
+            const rawStatus = record?.status;
+            const stale = isStaleLoading(record);
+            // Normalize stale "loading" rows to a retryable state
+            const status = stale ? "stale" : rawStatus;
             const isCurrentlyLoading = loadingPeriod === period;
 
             return (
@@ -375,6 +386,7 @@ function BackfillSection() {
                 className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
                   status === "done" ? "border-emerald-500/30 bg-emerald-500/5" :
                   status === "error" ? "border-red-500/30 bg-red-500/5" :
+                  status === "stale" ? "border-orange-500/30 bg-orange-500/5" :
                   status === "loading" || isCurrentlyLoading ? "border-amber-500/30 bg-amber-500/5" :
                   "border-border"
                 }`}
@@ -384,6 +396,8 @@ function BackfillSection() {
                     <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                   ) : status === "error" ? (
                     <AlertCircle className="h-4 w-4 text-red-400" />
+                  ) : status === "stale" ? (
+                    <AlertCircle className="h-4 w-4 text-orange-400" />
                   ) : isCurrentlyLoading ? (
                     <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
                   ) : (
@@ -398,6 +412,9 @@ function BackfillSection() {
                   {status === "error" && (
                     <span className="text-xs text-red-400" title={record?.error_message || ""}>Error</span>
                   )}
+                  {status === "stale" && (
+                    <span className="text-xs text-orange-400" title="La carga anterior se interrumpió. Volvé a intentar.">Interrumpida</span>
+                  )}
                   <button
                     onClick={() => handleBackfill(period)}
                     disabled={isCurrentlyLoading || loadingPeriod !== null}
@@ -407,7 +424,7 @@ function BackfillSection() {
                         : "bg-primary text-primary-foreground hover:bg-primary/90"
                     } disabled:opacity-50`}
                   >
-                    {isCurrentlyLoading ? "Cargando..." : status === "done" ? "Recargar" : "Cargar"}
+                    {isCurrentlyLoading ? "Cargando..." : status === "done" ? "Recargar" : status === "stale" ? "Reintentar" : "Cargar"}
                   </button>
                 </div>
               </div>
