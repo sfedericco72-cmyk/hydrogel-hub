@@ -378,7 +378,9 @@ function BackfillSection() {
             const stale = isStaleLoading(record);
             // Normalize stale "loading" rows to a retryable state
             const status = stale ? "stale" : rawStatus;
-            const isCurrentlyLoading = loadingPeriod === period;
+            const isInvoking = loadingPeriod === period;
+            // Either we just clicked, or the DB shows it is still running.
+            const isCurrentlyLoading = isInvoking || status === "loading" || status === "pending";
 
             return (
               <div
