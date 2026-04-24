@@ -10,19 +10,49 @@ export interface CutHistoryRecord {
   created_at: string;
 }
 
+/**
+ * Daily cuts history for a single device (last 90 days only — beyond that the
+ * data lives in `device_cuts_monthly`). Used by the BranchDetail weekly view.
+ */
 export function useCutsHistory(fixno: string | undefined) {
   return useQuery({
     queryKey: ["cuts-history", fixno],
     queryFn: async () => {
       if (!fixno) return [];
       const { data, error } = await supabase
-        .from("device_cuts_history")
-        .select("*")
+        .from("device_cuts_daily")
+        .select("id, fixno, cut_date, total_cuts, daily_cuts, created_at")
         .eq("fixno", fixno)
         .order("cut_date", { ascending: true });
 
       if (error) throw error;
       return (data ?? []) as CutHistoryRecord[];
+    },
+    enabled: !!fixno,
+  });
+}
+
+/**
+ * Monthly aggregated cuts for a single device (full history, no caducity).
+ * Used by the BranchDetail monthly/annual views.
+ */
+export interface MonthlyCutsRecord {
+  year_month: string; // 'YYYY-MM'
+  total_cuts: number;
+}
+
+export function useMonthlyCuts(fixno: string | undefined) {
+  return useQuery({
+    queryKey: ["monthly-cuts", fixno],
+    queryFn: async () => {
+      if (!fixno) return [];
+      const { data, error } = await supabase
+        .from("device_cuts_monthly")
+        .select("year_month, total_cuts")
+        .eq("fixno", fixno)
+        .order("year_month", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as MonthlyCutsRecord[];
     },
     enabled: !!fixno,
   });
