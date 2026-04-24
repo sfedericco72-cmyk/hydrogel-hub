@@ -347,10 +347,10 @@ function BackfillSection() {
   async function handleBackfill(period: string) {
     setLoadingPeriod(period);
     try {
-      const result = await runBackfill.mutateAsync(period);
-      toast.success(`${period}: ${result.records} registros cargados desde ${result.transactions} transacciones`);
+      await runBackfill.mutateAsync(period);
+      toast.info(`${formatPeriod(period)}: descarga iniciada. Esto puede tardar unos minutos.`);
     } catch (e: any) {
-      toast.error(`Error ${period}: ${e.message}`);
+      toast.error(`Error ${formatPeriod(period)}: ${e.message}`);
     } finally {
       setLoadingPeriod(null);
     }
@@ -378,7 +378,9 @@ function BackfillSection() {
             const stale = isStaleLoading(record);
             // Normalize stale "loading" rows to a retryable state
             const status = stale ? "stale" : rawStatus;
-            const isCurrentlyLoading = loadingPeriod === period;
+            const isInvoking = loadingPeriod === period;
+            // Either we just clicked, or the DB shows it is still running.
+            const isCurrentlyLoading = isInvoking || status === "loading" || status === "pending";
 
             return (
               <div
