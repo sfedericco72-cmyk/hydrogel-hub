@@ -4,17 +4,22 @@ import {
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const DEFAULT_SITE_NAME = "CutMonitor"
+// Plataforma — siempre fija. El nombre del tenant NO va acá.
+const PLATFORM_NAME = "CutMonitor"
 
 interface StockBajoProps {
   branchName?: string
   fixno?: string
   remainingCuts?: number
   estimatedDays?: number
-  brandName?: string
+  /** Logo del tenant — aparece en el header del email */
   logoUrl?: string
+  /** Nombre del tenant — usado como alt del logo y mencionado dentro del cuerpo */
+  tenantName?: string
+  /** URL de la tienda del tenant para el botón "Comprar" */
   storeUrl?: string
   storeButtonLabel?: string
+  /** Email de soporte del tenant (no de la plataforma) */
   supportEmail?: string
 }
 
@@ -23,23 +28,22 @@ const StockBajoEmail = ({
   fixno,
   remainingCuts,
   estimatedDays,
-  brandName,
   logoUrl,
+  tenantName,
   storeUrl,
   storeButtonLabel,
   supportEmail,
 }: StockBajoProps) => {
-  const siteName = brandName || DEFAULT_SITE_NAME
   const buttonLabel = storeButtonLabel || 'Comprar insumos'
   return (
   <Html lang="es" dir="ltr">
     <Head />
-    <Preview>⚠️ Stock bajo en {branchName || 'un equipo'} — quedan {remainingCuts ?? '?'} cortes</Preview>
+    <Preview>{`⚠️ Stock bajo en ${branchName || 'un equipo'} — quedan ${remainingCuts ?? '?'} cortes`}</Preview>
     <Body style={main}>
       <Container style={container}>
         {logoUrl ? (
         <Section style={headerSection}>
-            <Img src={logoUrl} alt={siteName} width="120" height="40" style={logo} />
+            <Img src={logoUrl} alt={tenantName || ''} width="120" height="40" style={logo} />
         </Section>
         ) : null}
 
@@ -74,7 +78,7 @@ const StockBajoEmail = ({
 
         <Hr style={hr} />
         <Text style={footer}>
-          Este es un mensaje automático de {siteName}.
+          Este es un mensaje automático de {PLATFORM_NAME}.
           {supportEmail ? <> Si tiene consultas, escríbanos a <a href={`mailto:${supportEmail}`} style={footerLink}>{supportEmail}</a>.</> : ' Si tiene consultas, contacte a su ejecutivo comercial.'}
         </Text>
       </Container>
@@ -93,11 +97,11 @@ export const template = {
     fixno: 'FX-1234',
     remainingCuts: 8,
     estimatedDays: 3,
-    brandName: 'Bitec Hydrogel Hub',
+    tenantName: 'Bitec',
     logoUrl: 'https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png',
     storeUrl: 'https://bitec.cl/tienda/',
     storeButtonLabel: 'Comprar insumos en bitec.cl',
-    supportEmail: 'santiago.federico@bitec.cl',
+    supportEmail: 'cutmonitor@bitec.cl',
   },
 } satisfies TemplateEntry
 

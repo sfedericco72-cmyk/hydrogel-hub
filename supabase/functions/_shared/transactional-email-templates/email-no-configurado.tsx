@@ -4,15 +4,18 @@ import {
 } from 'npm:@react-email/components@0.0.22'
 import type { TemplateEntry } from './registry.ts'
 
-const DEFAULT_SITE_NAME = "CutMonitor"
+// Plataforma — siempre fija. El nombre del tenant NO va acá.
+const PLATFORM_NAME = "CutMonitor"
 
 interface EmailNoConfiguradoProps {
   branchName?: string
   fixno?: string
   customerName?: string
   alertType?: string
-  brandName?: string
+  /** Logo del tenant — aparece en el header */
   logoUrl?: string
+  /** Nombre del tenant — usado como alt del logo */
+  tenantName?: string
 }
 
 const EmailNoConfiguradoEmail = ({
@@ -20,10 +23,9 @@ const EmailNoConfiguradoEmail = ({
   fixno,
   customerName,
   alertType,
-  brandName,
   logoUrl,
+  tenantName,
 }: EmailNoConfiguradoProps) => {
-  const siteName = brandName || DEFAULT_SITE_NAME
   return (
   <Html lang="es" dir="ltr">
     <Head />
@@ -32,7 +34,7 @@ const EmailNoConfiguradoEmail = ({
       <Container style={container}>
         {logoUrl ? (
         <Section style={headerSection}>
-            <Img src={logoUrl} alt={siteName} width="120" height="40" style={logo} />
+            <Img src={logoUrl} alt={tenantName || ''} width="120" height="40" style={logo} />
         </Section>
         ) : null}
 
@@ -54,7 +56,7 @@ const EmailNoConfiguradoEmail = ({
 
         <Hr style={hr} />
         <Text style={footer}>
-          Este es un mensaje automático de {siteName}.
+          Este es un mensaje automático de {PLATFORM_NAME}.
         </Text>
       </Container>
     </Body>
@@ -72,7 +74,7 @@ export const template = {
     fixno: 'FX-1234',
     customerName: 'Hospital ABC',
     alertType: 'stock bajo',
-    brandName: 'Bitec Hydrogel Hub',
+    tenantName: 'Bitec',
     logoUrl: 'https://bitec.cl/wp-content/uploads/2025/01/logo-bitec-hd.png',
   },
 } satisfies TemplateEntry

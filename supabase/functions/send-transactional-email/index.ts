@@ -3,9 +3,10 @@ import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { TEMPLATES } from '../_shared/transactional-email-templates/registry.ts'
 
-// Configuration baked in at scaffold time — do NOT change these manually.
-// To update, re-run the email domain setup flow.
-const SITE_NAME = "Bitec Hydrogel Hub"
+// Plataforma — el "From" de todos los emails es siempre la plataforma,
+// nunca el nombre del tenant. El logo y branding del tenant aparecen
+// dentro del cuerpo del email, no en el remitente.
+const SITE_NAME = "CutMonitor"
 // SENDER_DOMAIN is the verified sender subdomain FQDN (e.g., "notify.example.com").
 // It MUST match the subdomain delegated to Lovable's nameservers — never the root domain.
 // The email API looks up this exact domain; a mismatch causes "No email domain record found".
@@ -62,7 +63,6 @@ Deno.serve(async (req) => {
   let templateData: Record<string, any> = {}
   let metadata: Record<string, any> | null = null
   let skipLog = false
-  let brandNameOverride: string | null = null
   try {
     const body = await req.json()
     templateName = body.templateName || body.template_name
@@ -71,9 +71,6 @@ Deno.serve(async (req) => {
     idempotencyKey = body.idempotencyKey || body.idempotency_key || messageId
     if (body.templateData && typeof body.templateData === 'object') {
       templateData = body.templateData
-      if (typeof body.templateData.brandName === 'string' && body.templateData.brandName.trim()) {
-        brandNameOverride = body.templateData.brandName.trim()
-      }
     }
     if (body.metadata && typeof body.metadata === 'object') {
       metadata = body.metadata
@@ -323,14 +320,12 @@ Deno.serve(async (req) => {
     })
   }
 
-  const fromName = brandNameOverride || SITE_NAME
-
   const { error: enqueueError } = await supabase.rpc('enqueue_email', {
     queue_name: 'transactional_emails',
     payload: {
       message_id: messageId,
       to: effectiveRecipient,
-      from: `${fromName} <noreply@${FROM_DOMAIN}>`,
+      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
       sender_domain: SENDER_DOMAIN,
       subject: resolvedSubject,
       html,

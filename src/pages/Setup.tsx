@@ -25,7 +25,6 @@ export default function Setup() {
     company_name: "",
     bcc_email: "",
     logo_url: "",
-    brand_name: "",
     store_url: "",
     store_button_label: "",
     support_email: "",
@@ -47,7 +46,6 @@ export default function Setup() {
         company_name: settings.company_name,
         bcc_email: settings.bcc_email ?? "",
         logo_url: settings.logo_url ?? "",
-        brand_name: settings.brand_name ?? "",
         store_url: settings.store_url ?? "",
         store_button_label: settings.store_button_label ?? "",
         support_email: settings.support_email ?? "",
@@ -75,7 +73,6 @@ export default function Setup() {
         company_name: form.company_name,
         bcc_email: form.bcc_email || null,
         logo_url: form.logo_url || null,
-        brand_name: form.brand_name || null,
         store_url: form.store_url || null,
         store_button_label: form.store_button_label || null,
         support_email: form.support_email || null,
@@ -147,7 +144,6 @@ export default function Setup() {
                 <img src={form.logo_url} alt="Logo" className="h-10 max-w-[200px] object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               </div>
             )}
-            <Field label="Nombre de marca para emails" value={form.brand_name} onChange={v => handleChange("brand_name", v)} placeholder={form.company_name || "Mi Empresa"} />
             <Field label="URL de tu tienda online (botón Comprar)" value={form.store_url} onChange={v => handleChange("store_url", v)} placeholder="https://miempresa.com/tienda" />
             <Field label="Texto del botón Comprar" value={form.store_button_label} onChange={v => handleChange("store_button_label", v)} placeholder="Comprar insumos" />
             <Field label="Email de soporte para tus clientes" value={form.support_email} onChange={v => handleChange("support_email", v)} placeholder="soporte@miempresa.com" />
