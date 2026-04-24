@@ -32,7 +32,6 @@ export default function Onboarding() {
     company_name: "",
     bcc_email: "",
     logo_url: "",
-    brand_name: "",
     store_url: "",
     store_button_label: "Comprar insumos",
     support_email: "",
@@ -102,7 +101,7 @@ export default function Onboarding() {
           _cutabc_username: form.cutabc_username,
           _cutabc_password: form.cutabc_password,
           _logo_url: form.logo_url || null,
-          _brand_name: form.brand_name || form.company_name,
+          _brand_name: form.company_name,
           _store_url: form.store_url || null,
           _store_button_label: form.store_button_label || null,
           _support_email: form.support_email || null,
@@ -216,18 +215,6 @@ export default function Onboarding() {
                     </div>
                   )}
                   <p className="mt-1 text-xs text-muted-foreground">Si lo dejás vacío no se muestra logo en los emails.</p>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Nombre de marca para emails</label>
-                  <input
-                    type="text"
-                    value={form.brand_name}
-                    onChange={e => handleChange("brand_name", e.target.value)}
-                    placeholder={form.company_name || "Mi Empresa"}
-                    className="w-full rounded-lg border border-input bg-secondary px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">Aparece como remitente y firma. Por defecto se usa el nombre de la empresa.</p>
                 </div>
 
                 <div>

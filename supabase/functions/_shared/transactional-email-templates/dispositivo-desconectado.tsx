@@ -30,7 +30,7 @@ const DesconectadoEmail = ({
   return (
   <Html lang="es" dir="ltr">
     <Head />
-    <Preview>🔌 Equipo desconectado: {branchName || fixno || 'un equipo'} sin conexión hace {daysSinceOnline ?? '?'} días</Preview>
+    <Preview>{`🔌 Equipo desconectado: ${branchName || fixno || 'un equipo'} sin conexión hace ${daysSinceOnline ?? '?'} días`}</Preview>
     <Body style={main}>
       <Container style={container}>
         {logoUrl ? (

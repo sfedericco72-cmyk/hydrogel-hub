@@ -38,7 +38,7 @@ const StockBajoEmail = ({
   return (
   <Html lang="es" dir="ltr">
     <Head />
-    <Preview>⚠️ Stock bajo en {branchName || 'un equipo'} — quedan {remainingCuts ?? '?'} cortes</Preview>
+    <Preview>{`⚠️ Stock bajo en ${branchName || 'un equipo'} — quedan ${remainingCuts ?? '?'} cortes`}</Preview>
     <Body style={main}>
       <Container style={container}>
         {logoUrl ? (
