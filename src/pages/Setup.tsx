@@ -347,10 +347,10 @@ function BackfillSection() {
   async function handleBackfill(period: string) {
     setLoadingPeriod(period);
     try {
-      const result = await runBackfill.mutateAsync(period);
-      toast.success(`${period}: ${result.records} registros cargados desde ${result.transactions} transacciones`);
+      await runBackfill.mutateAsync(period);
+      toast.info(`${formatPeriod(period)}: descarga iniciada. Esto puede tardar unos minutos.`);
     } catch (e: any) {
-      toast.error(`Error ${period}: ${e.message}`);
+      toast.error(`Error ${formatPeriod(period)}: ${e.message}`);
     } finally {
       setLoadingPeriod(null);
     }
