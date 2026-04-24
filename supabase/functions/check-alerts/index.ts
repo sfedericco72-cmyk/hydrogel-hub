@@ -78,9 +78,11 @@ Deno.serve(async (req) => {
     const ALERT_COOLDOWN_DAYS = settings.alert_cooldown_days ?? DEFAULT_COOLDOWN_DAYS
     const ALERT_MAX_WINDOW_DAYS = settings.alert_max_window_days ?? DEFAULT_MAX_WINDOW_DAYS
 
-    // Branding props injected into every templateData for this tenant
+    // Branding del tenant inyectado en cada email.
+    // OJO: tenantName es solo para el alt del logo / contexto interno —
+    // el "From" del email es siempre "CutMonitor", no el tenant.
     const brandingProps = {
-      brandName: (settings as any).brand_name || (settings as any).company_name || null,
+      tenantName: (settings as any).company_name || null,
       logoUrl: (settings as any).logo_url || null,
       storeUrl: (settings as any).store_url || null,
       storeButtonLabel: (settings as any).store_button_label || null,
@@ -276,7 +278,7 @@ async function trySendAlert(
           fixno: device.fixno,
           customerName: device.customer_name,
           alertType: templateName === 'stock-bajo' ? 'stock bajo' : 'equipo desconectado',
-          brandName: templateData.brandName,
+          tenantName: templateData.tenantName,
           logoUrl: templateData.logoUrl,
         },
         metadata: { ...baseMetadata, alert_type: 'email-no-configurado' },
