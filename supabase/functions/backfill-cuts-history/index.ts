@@ -59,11 +59,14 @@ async function runBackfill(
   tenantId: string,
   period: string,
 ): Promise<void> {
-  // Full month range
+  // Full month range, capped at today for the current (in-progress) month.
   const [year, month] = period.split("-").map(Number);
   const lastDay = new Date(year, month, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const endDay = isCurrentMonth ? today.getDate() : lastDay;
   const from = `${period}-01`;
-  const to = `${period}-${String(lastDay).padStart(2, "0")}`;
+  const to = `${period}-${String(endDay).padStart(2, "0")}`;
 
   // Split into two halves (CutABC slows down on big ranges).
   const mid = 15;
