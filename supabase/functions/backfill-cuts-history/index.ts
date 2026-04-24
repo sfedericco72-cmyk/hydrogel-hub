@@ -119,24 +119,6 @@ Deno.serve(async (req) => {
       cutabc_password: settings.cutabc_password as string,
     };
 
-    // Auto-discover brannas from already-synced devices for this tenant.
-    // CutABC partitions data by branna and hides per-device "Consume" rows
-    // when no branna filter is provided. We iterate by branna to capture them.
-    const { data: brannaRows } = await supabase
-      .from("devices")
-      .select("customer_name")
-      .eq("tenant_id", tenantId)
-      .not("customer_name", "is", null);
-    const brannas = Array.from(
-      new Set(
-        ((brannaRows || []) as { customer_name: string | null }[])
-          .map((r) => (r.customer_name || "").trim())
-          .filter((b) => b.length > 0),
-      ),
-    );
-    const brannaTargets = brannas.length > 0 ? brannas : [""];
-    console.log(`[${tenantId}] Backfill brannas: [${brannaTargets.join(", ")}]`);
-
     const { period } = await req.json();
     if (!period || !/^\d{4}-\d{2}$/.test(period)) {
       return new Response(
@@ -153,133 +135,25 @@ Deno.serve(async (req) => {
         { onConflict: "period,tenant_id" }
       );
 
-    // Full month range
-    const [year, month] = period.split("-").map(Number);
-    const lastDay = new Date(year, month, 0).getDate();
-    const from = `${period}-01`;
-    const to = `${period}-${String(lastDay).padStart(2, "0")}`;
+    // Run the heavy work in the background so the client never waits for the full
+    // CutABC pagination. The frontend polls cuts_history_backfill for status.
+    // @ts-ignore - EdgeRuntime is provided by Supabase Edge Functions runtime.
+    EdgeRuntime.waitUntil(
+      runBackfill(supabase, creds, tenantId, period).catch(async (err) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[${tenantId}] Backfill ${period} failed:`, errMsg);
+        await supabase
+          .from("cuts_history_backfill")
+          .update({ status: "error", error_message: errMsg, completed_at: new Date().toISOString() })
+          .eq("period", period)
+          .eq("tenant_id", tenantId);
+      }),
+    );
 
-    // Split into two halves (API can be slow with large date ranges)
-    const mid = 15;
-    const ranges = [
-      { from, to: `${period}-${String(mid).padStart(2, "0")}` },
-      { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
-    ];
-
-    console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
-
-    const sessionId = await loginCutABC(creds);
-
-    // Streaming: fetch page-by-page, aggregate Consume into a single dailyMap
-    // for the full period, dedupe by billno across all pages, and upsert
-    // incrementally to avoid timeouts/memory pressure on large months.
-    const PAGE_SIZE = 500;
-    const seen = new Set<string>();
-    const dailyMap = new Map<string, { fixno: string; date: string; cuts: number }>();
-    let totalFetched = 0;
-    let totalExpected = 0;
-    let consumeCount = 0;
-    let otherCount = 0;
-    let dupes = 0;
-
-    async function flushDailyMap() {
-      if (dailyMap.size === 0) return 0;
-      const rows = Array.from(dailyMap.values()).map((d) => ({
-        fixno: d.fixno,
-        cut_date: d.date,
-        total_cuts: 0,
-        daily_cuts: d.cuts,
-        tenant_id: tenantId,
-      }));
-      let written = 0;
-      for (let i = 0; i < rows.length; i += 100) {
-        const chunk = rows.slice(i, i + 100);
-        const { error } = await supabase
-          .from("device_cuts_history")
-          .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
-        if (error) throw new Error(`Upsert failed: ${error.message}`);
-        written += chunk.length;
-      }
-      dailyMap.clear();
-      return written;
-    }
-
-    function ingestPage(items: Record<string, unknown>[]) {
-      for (const tx of items) {
-        const billno = tx.billno as string;
-        if (!billno || seen.has(billno)) { dupes++; continue; }
-        seen.add(billno);
-
-        const kind = ((tx.balakindna2 as string) || "").trim();
-        if (kind !== "Consume") { otherCount++; continue; }
-        consumeCount++;
-
-        const fixno = tx.fixno as string;
-        const billdate = tx.billdate as string;
-        if (!fixno || !billdate) continue;
-
-        const date = billdate.substring(0, 10);
-        const key = `${fixno}|${date}`;
-        const qty = parseInt(tx.busiqty2 as string) || 1;
-        const existing = dailyMap.get(key);
-        if (existing) existing.cuts += qty;
-        else dailyMap.set(key, { fixno, date, cuts: qty });
-      }
-    }
-
-    for (const range of ranges) {
-      for (const branna of brannaTargets) {
-        const first = await fetchPage(sessionId, range.from, range.to, 1, PAGE_SIZE, branna);
-        const expectedHere = first.reccnt;
-        totalExpected += expectedHere;
-        console.log(`  [${range.from}→${range.to}][${branna || "*"}] Page 1: ${first.items.length}/${expectedHere}`);
-        ingestPage(first.items);
-        totalFetched += first.items.length;
-
-        const totalPages = Math.ceil(expectedHere / PAGE_SIZE);
-        for (let p = 2; p <= totalPages; p++) {
-          const next = await fetchPage(sessionId, range.from, range.to, p, PAGE_SIZE, branna);
-          console.log(`  [${range.from}→${range.to}][${branna || "*"}] Page ${p}: ${next.items.length}`);
-          ingestPage(next.items);
-          totalFetched += next.items.length;
-        }
-      }
-    }
-
-    if (dupes > 0) console.log(`Removed ${dupes} duplicates by billno`);
-    console.log(`Consume: ${consumeCount}, Other: ${otherCount}, Daily records: ${dailyMap.size}`);
-
-    const inserted = await flushDailyMap();
-
-    // Mark as done
-    await supabase
-      .from("cuts_history_backfill")
-      .update({
-        status: "done",
-        records_loaded: inserted,
-        completed_at: new Date().toISOString(),
-        error_message: null,
-      })
-      .eq("period", period)
-      .eq("tenant_id", tenantId);
-
-    const summary = {
-      success: true,
-      period,
-      tenant_id: tenantId,
-      total_transactions: totalFetched - dupes,
-      expected_transactions: totalExpected,
-      consume_transactions: consumeCount,
-      other_transactions: otherCount,
-      duplicates_removed: dupes,
-      daily_records: inserted,
-      complete: (totalFetched - dupes) >= totalExpected,
-    };
-    console.log(`[${tenantId}] Backfill complete:`, JSON.stringify(summary));
-
-    return new Response(JSON.stringify(summary), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: true, period, tenant_id: tenantId, status: "loading" }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error("Backfill error:", errMsg);
