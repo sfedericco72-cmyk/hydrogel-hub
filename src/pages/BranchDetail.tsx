@@ -97,6 +97,30 @@ function aggregateHistory(
   return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
+function aggregateMonthly(
+  monthly: { year_month: string; total_cuts: number }[],
+  resolution: TimeResolution,
+  startDate?: string | null,
+): ChartPoint[] {
+  const startMonth = startDate ? startDate.slice(0, 7) : null;
+  const map = new Map<string, ChartPoint>();
+  for (const r of monthly) {
+    if (startMonth && r.year_month < startMonth) continue;
+    let key: string;
+    let label: string;
+    if (resolution === "annual") {
+      key = r.year_month.slice(0, 4);
+      label = key;
+    } else {
+      key = r.year_month;
+      label = getMonthLabel(r.year_month);
+    }
+    if (!map.has(key)) map.set(key, { key, label, totalCuts: 0 });
+    map.get(key)!.totalCuts += r.total_cuts ?? 0;
+  }
+  return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
 export default function BranchDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
