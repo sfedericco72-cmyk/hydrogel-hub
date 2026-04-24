@@ -36,14 +36,13 @@ async function fetchPage(
   to: string,
   page: number,
   pageSize: number,
-  branna: string,
 ): Promise<{ items: Record<string, unknown>[]; reccnt: number }> {
   const res = await fetch(`${CUTABC_BASE}/reportSetting/getMastinfo`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", sessionId },
     body: new URLSearchParams({
       itemno: "fixbalaqty",
-      data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: branna }, { fixno: "" }]),
+      data: JSON.stringify([{ billdate_beg: from }, { billdate_end: to }, { branna: "" }, { fixno: "" }]),
       pageindex: String(page),
       pagesize: String(pageSize),
     }),

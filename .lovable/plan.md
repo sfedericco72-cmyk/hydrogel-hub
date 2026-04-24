@@ -1,51 +1,49 @@
-## Diagnóstico
+## Problema
 
-CutABC particiona internamente los datos por un campo llamado `branna` (clientes del portal de CutABC). En CutMonitor **no usamos ese concepto** — los clientes y la agrupación se definen acá.
+El backfill de marzo falla con "Function returned a non-2xx" y nunca actualiza el contador de registros cargados. En los logs de la Edge Function se ve:
 
-El problema es puramente técnico: cuando pedimos transacciones a CutABC sin filtrar por `branna`, la API devuelve solo agregados/distribuciones y oculta los "Consume" individuales. Por eso `device_cuts_history` queda vacío para muchos equipos (ej. `HX00240919194318` en KLAZ) y el gráfico/contador "cortes desde asignación" muestra 0.
+- **Doble boot/shutdown** del worker (la función fue reiniciada por el runtime).
+- 17 páginas × **4 brannas** × 2 quincenas = **136 llamadas secuenciales** a CutABC para un solo mes → **~9 minutos**, muy por encima del límite de wall-clock de Edge Functions.
+- Las 4 brannas devuelven **exactamente los mismos 8.356 registros** (`Page 1: 500/8356` idéntico para Klaz, CDRSI, JBCP y Marioclp).
 
-Verificado contra la API: pidiendo el mismo equipo con `branna="Klaz"` aparecen las 223 transacciones reales con sus "Consume" diarios.
+## Causa raíz
+
+En el cambio anterior agregamos iteración por branna en **ambas** funciones, pero los dos endpoints de CutABC se comportan distinto:
+
+- `custbalaqry` (sync incremental): **sí** oculta los Consume si no se filtra por branna → la iteración está bien.
+- `fixbalaqty` (backfill histórico): **ignora** el filtro `branna` y devuelve siempre el total del usuario → iterar por branna multiplica el trabajo ×4 sin obtener datos nuevos.
+
+Por eso BITEC funcionaba antes: usaba una sola pasada sin branna, que es lo correcto para `fixbalaqty`.
 
 ## Solución
 
-Tratar al `branna` como un detalle de implementación del sync, invisible para el usuario. El sync auto-descubre los brannas a partir de los equipos que CutABC ya devuelve y los usa para iterar las consultas de transacciones. Sin configuración, sin UI, sin columnas nuevas.
+### 1. Revertir `backfill-cuts-history` a una sola pasada
+- Quitar el loop por brannas (y la query a `devices` para descubrirlas).
+- Pasar `branna: ""` como antes.
+- Resultado: **~34 páginas** por mes en lugar de 136 → cabe holgado en el tiempo de la función.
 
-### 1. `sync-cutabc` (edge function)
-- `fetchAllDevices` ya devuelve todos los equipos visibles para el usuario del tenant (sigue igual).
-- Calcular internamente `brannas = unique(devices.map(d => d.branna)).filter(Boolean)`.
-- `fetchAllTransactions`: en vez de 1 llamada con `branna=""`, hacer **1 pasada por cada branna**, paginadas. Concatenar y deduplicar por `(fixno, billno)`.
-- Resto del flujo (upsert devices, snapshot diario, upsert transactions) sin cambios.
+### 2. Procesamiento en background con `EdgeRuntime.waitUntil`
+Para meses muy grandes y para que el cliente nunca vea "non-2xx":
+- Crear/upsert el registro en `cuts_history_backfill` con `status: "loading"` y responder **inmediatamente** con `{ job_id, status: "loading" }` (HTTP 202).
+- Lanzar el trabajo real con `EdgeRuntime.waitUntil(...)`.
+- En caso de error dentro del background, marcar el registro como `status: "error"` con el mensaje.
 
-### 2. `backfill-cuts-history` (edge function)
-- Mismo patrón: tomar brannas únicos desde `devices` del tenant (`SELECT DISTINCT customer_name FROM devices WHERE tenant_id=$1`) y por cada chunk mensual hacer una pasada por cada branna.
-- Mantiene el acumulado de `total_cuts` y el chunking actual.
+### 3. Polling desde el frontend
+- `useRunBackfill` ya invalida `cuts_history_backfill`. Agregar polling automático en `useBackfillStatus` (refetchInterval cada 3s) **mientras haya algún período en `loading`**, y detenerlo cuando todos estén `done` o `error`.
+- El toast de éxito/error se dispara cuando el período cambia de `loading` → `done`/`error`, no al recibir la respuesta inicial.
 
-### 3. Lo que NO cambia
-- Esquema de la base de datos.
-- UI.
-- Comportamiento para tenants con un solo branna (Bitec, etc.): hace 1 pasada filtrada, idéntico al resultado actual pero correcto.
-- El `customer_name` que vemos hoy en algunas pantallas de CutMonitor (que viene de `branna`) puede seguir guardándose en `devices.customer_name` como metadato crudo, pero no se usa como concepto de cliente.
+### 4. Mantener cambios en `sync-cutabc`
+La iteración por branna en `sync-cutabc` se queda como está — ahí sí es necesaria.
 
-## Validación post-deploy
-1. Relanzar backfill de KLAZ desde 2024-01-01.
-2. `device_cuts_history` para `HX00240919194318` debe traer ~223 filas con cortes diarios reales.
-3. En la UI: el gráfico de historia del equipo muestra datos, y el contador "cortes desde asignación" deja de quedar en 0.
+## Archivos a tocar
 
-## Detalle técnico
+- `supabase/functions/backfill-cuts-history/index.ts` — quitar loop de brannas, mover trabajo a `waitUntil`, responder 202.
+- `src/hooks/useBackfillHistory.ts` — polling condicional, manejar respuesta async.
+- `src/pages/Setup.tsx` (o donde se muestre el botón de backfill) — ajustar mensajes para reflejar "en progreso".
 
-```text
-syncTenant:
-  devices = fetchAllDevices(session)            # 302 equipos para KLAZ
-  brannas = unique(devices.map(d=>d.branna))    # ["Klaz","Marioclp","CDRSI","JBCP"]
-  txs = []
-  for b of brannas:
-    txs.push(...fetchTxByBranna(session, b, since))
-  dedup(txs, key=`${fixno}|${billno}`)
-  upsert into device_transactions / device_cuts_history
+## Validación
 
-backfill-cuts-history:
-  brannas = SELECT DISTINCT customer_name FROM devices WHERE tenant_id=$1
-  for each month chunk:
-    for b of brannas:
-      custbalaqry with {branna:b}
-```
+1. Lanzar backfill de marzo desde KLAZ → respuesta inmediata, fila pasa a `loading`.
+2. UI hace polling, muestra el progreso, termina en `done` con `records_loaded > 0`.
+3. Verificar que el dispositivo `HX00240919194318` ahora tiene cortes diarios en marzo.
+4. Re-correr meses ya cargados (feb, mar) para incorporar los Consume que faltaban.
