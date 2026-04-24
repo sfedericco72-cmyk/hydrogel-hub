@@ -4,17 +4,41 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type Device = Tables<"devices">;
 
+/**
+ * Supabase caps `select` queries at 1000 rows by default. For tenant-wide
+ * aggregations (devices × days × months) we can easily exceed that. This
+ * helper paginates a builder factory using `.range()` until we've fetched
+ * everything, so the same logic works for any tenant size.
+ */
+const PAGE_SIZE = 1000;
+async function fetchAll<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  // Hard cap to avoid infinite loops in case a buggy query never returns < PAGE_SIZE.
+  for (let i = 0; i < 50; i++) {
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const chunk = data ?? [];
+    all.push(...chunk);
+    if (chunk.length < PAGE_SIZE) return all;
+    from += PAGE_SIZE;
+  }
+  return all;
+}
+
 export function useDevices() {
   return useQuery({
     queryKey: ["devices"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("devices")
-        .select("*")
-        .order("total_cuts", { ascending: false });
-
-      if (error) throw error;
-      return data as Device[];
+      return await fetchAll<Device>((from, to) =>
+        supabase
+          .from("devices")
+          .select("*")
+          .order("total_cuts", { ascending: false })
+          .range(from, to),
+      );
     },
   });
 }
@@ -42,16 +66,17 @@ export function useLastCutDates() {
   return useQuery({
     queryKey: ["last-cut-dates"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("device_cuts_daily")
-        .select("fixno, cut_date")
-        .gt("daily_cuts", 0)
-        .order("cut_date", { ascending: false });
-
-      if (error) throw error;
+      const data = await fetchAll<{ fixno: string; cut_date: string }>((from, to) =>
+        supabase
+          .from("device_cuts_daily")
+          .select("fixno, cut_date")
+          .gt("daily_cuts", 0)
+          .order("cut_date", { ascending: false })
+          .range(from, to),
+      );
 
       const map = new Map<string, string>();
-      data?.forEach((r) => {
+      data.forEach((r) => {
         if (!map.has(r.fixno)) map.set(r.fixno, r.cut_date);
       });
       return map;
@@ -68,16 +93,17 @@ export function useAvgDailyCuts() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const dateStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-      const { data, error } = await supabase
-        .from("device_cuts_daily")
-        .select("fixno, daily_cuts")
-        .gt("daily_cuts", 0)
-        .gte("cut_date", dateStr);
-
-      if (error) throw error;
+      const data = await fetchAll<{ fixno: string; daily_cuts: number | null }>((from, to) =>
+        supabase
+          .from("device_cuts_daily")
+          .select("fixno, daily_cuts")
+          .gt("daily_cuts", 0)
+          .gte("cut_date", dateStr)
+          .range(from, to),
+      );
 
       const sums = new Map<string, { total: number; days: number }>();
-      data?.forEach((r) => {
+      data.forEach((r) => {
         const entry = sums.get(r.fixno) || { total: 0, days: 0 };
         entry.total += r.daily_cuts!;
         entry.days += 1;
@@ -106,15 +132,17 @@ export function useMonthlyCutsMap(months = 6) {
       startDate.setDate(1);
       const startMonth = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
 
-      const { data, error } = await supabase
-        .from("device_cuts_monthly")
-        .select("fixno, year_month, total_cuts")
-        .gte("year_month", startMonth);
-
-      if (error) throw error;
+      const data = await fetchAll<{ fixno: string; year_month: string; total_cuts: number }>(
+        (from, to) =>
+          supabase
+            .from("device_cuts_monthly")
+            .select("fixno, year_month, total_cuts")
+            .gte("year_month", startMonth)
+            .range(from, to),
+      );
 
       const result = new Map<string, Map<string, number>>();
-      data?.forEach((r) => {
+      data.forEach((r) => {
         if (!result.has(r.fixno)) result.set(r.fixno, new Map());
         const deviceMap = result.get(r.fixno)!;
         deviceMap.set(r.year_month, (deviceMap.get(r.year_month) ?? 0) + (r.total_cuts ?? 0));
