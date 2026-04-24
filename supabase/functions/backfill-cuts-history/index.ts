@@ -59,20 +59,26 @@ async function runBackfill(
   tenantId: string,
   period: string,
 ): Promise<void> {
-  // Full month range
+  // Full month range, capped at today for the current (in-progress) month.
   const [year, month] = period.split("-").map(Number);
   const lastDay = new Date(year, month, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const endDay = isCurrentMonth ? today.getDate() : lastDay;
   const from = `${period}-01`;
-  const to = `${period}-${String(lastDay).padStart(2, "0")}`;
+  const to = `${period}-${String(endDay).padStart(2, "0")}`;
 
-  // Split into two halves (CutABC slows down on big ranges).
+  // Split into two halves (CutABC slows down on big ranges). Skip the second
+  // half if the month in progress hasn't reached the midpoint yet.
   const mid = 15;
-  const ranges = [
-    { from, to: `${period}-${String(mid).padStart(2, "0")}` },
-    { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
-  ];
+  const ranges = endDay <= mid
+    ? [{ from, to }]
+    : [
+        { from, to: `${period}-${String(mid).padStart(2, "0")}` },
+        { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
+      ];
 
-  console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
+  console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${endDay}/${lastDay} days, ${ranges.length} half/halves)`);
 
   const sessionId = await loginCutABC(creds);
 

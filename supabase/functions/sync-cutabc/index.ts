@@ -7,7 +7,10 @@ const corsHeaders = {
 
 const CUTABC_BASE = "http://www.cutabc.cn:8091/cut_app/app";
 
-const SYNC_WINDOW_DAYS = 15;
+// Los cortes hechos con el equipo offline llegan a CutABC con la fecha de
+// reconexión, así que no hace falta una ventana larga. 2 días cubren hoy +
+// ayer y dan colchón si el cron diario falla una vez.
+const SYNC_WINDOW_DAYS = 2;
 const TENANT_TIMEOUT_MS = 120_000;
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
