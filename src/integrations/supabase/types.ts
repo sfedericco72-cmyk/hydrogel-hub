@@ -107,6 +107,7 @@ export type Database = {
           records_loaded: number | null
           started_at: string | null
           status: string
+          tenant_id: string
           updated_at: string
         }
         Insert: {
@@ -118,6 +119,7 @@ export type Database = {
           records_loaded?: number | null
           started_at?: string | null
           status?: string
+          tenant_id: string
           updated_at?: string
         }
         Update: {
@@ -129,6 +131,7 @@ export type Database = {
           records_loaded?: number | null
           started_at?: string | null
           status?: string
+          tenant_id?: string
           updated_at?: string
         }
         Relationships: []
