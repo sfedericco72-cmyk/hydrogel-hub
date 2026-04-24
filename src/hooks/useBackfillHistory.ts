@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface BackfillRecord {
@@ -12,7 +13,10 @@ export interface BackfillRecord {
 }
 
 export function useBackfillStatus() {
-  return useQuery({
+  const qc = useQueryClient();
+  const prevLoadingRef = useRef<Set<string>>(new Set());
+
+  const query = useQuery({
     queryKey: ["backfill-status"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -30,6 +34,35 @@ export function useBackfillStatus() {
     },
     refetchIntervalInBackground: true,
   });
+
+  // When a period transitions from loading/pending → done, invalidate every
+  // dashboard query that depends on device_cuts_history so the cards refresh
+  // with the newly backfilled data (otherwise the dashboard keeps showing
+  // stale "0 cortes" while the detail view shows the real numbers).
+  useEffect(() => {
+    const rows = query.data ?? [];
+    const currentLoading = new Set(
+      rows.filter((r) => r.status === "loading" || r.status === "pending").map((r) => r.period),
+    );
+    let anyFinished = false;
+    prevLoadingRef.current.forEach((period) => {
+      if (!currentLoading.has(period)) {
+        const row = rows.find((r) => r.period === period);
+        if (row?.status === "done") anyFinished = true;
+      }
+    });
+    if (anyFinished) {
+      qc.invalidateQueries({ queryKey: ["cuts-history"] });
+      qc.invalidateQueries({ queryKey: ["last-cut-dates"] });
+      qc.invalidateQueries({ queryKey: ["avg-daily-cuts"] });
+      qc.invalidateQueries({ queryKey: ["monthly-cuts-map"] });
+      qc.invalidateQueries({ queryKey: ["assignment-cuts"] });
+      qc.invalidateQueries({ queryKey: ["equipment-sales"] });
+    }
+    prevLoadingRef.current = currentLoading;
+  }, [query.data, qc]);
+
+  return query;
 }
 
 export function useRunBackfill() {
