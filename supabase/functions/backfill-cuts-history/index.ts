@@ -7,14 +7,20 @@ const corsHeaders = {
 
 const CUTABC_BASE = "http://www.cutabc.cn:8091/cut_app/app";
 
-async function loginCutABC(): Promise<string> {
+interface TenantCredentials {
+  cutabc_company_no: string;
+  cutabc_username: string;
+  cutabc_password: string;
+}
+
+async function loginCutABC(creds: TenantCredentials): Promise<string> {
   const res = await fetch(`${CUTABC_BASE}/Register/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      companyNo: Deno.env.get("CUTABC_COMPANY_NUMBER")!,
-      userName: Deno.env.get("CUTABC_USERNAME")!,
-      userPwd: Deno.env.get("CUTABC_PASSWORD")!,
+      companyNo: creds.cutabc_company_no,
+      userName: creds.cutabc_username,
+      userPwd: creds.cutabc_password,
     }),
   });
   const data = await res.json();
@@ -85,6 +91,68 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Identify the calling user (and therefore the tenant) from the JWT.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(
+      authHeader.replace("Bearer ", "")
+    );
+    if (claimsErr || !claimsData?.claims?.sub) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = claimsData.claims.sub as string;
+
+    // Resolve tenant + CutABC credentials from tenant_settings
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("tenant_id")
+      .eq("id", userId)
+      .single();
+    if (profileErr || !profile?.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: "User has no tenant assigned. Complete onboarding first." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const tenantId = profile.tenant_id as string;
+
+    const { data: settings, error: settingsErr } = await supabase
+      .from("tenant_settings")
+      .select("cutabc_company_no, cutabc_username, cutabc_password")
+      .eq("tenant_id", tenantId)
+      .single();
+    if (settingsErr || !settings?.cutabc_company_no || !settings?.cutabc_username || !settings?.cutabc_password) {
+      return new Response(
+        JSON.stringify({ error: "CutABC credentials not configured for this tenant." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const creds: TenantCredentials = {
+      cutabc_company_no: settings.cutabc_company_no as string,
+      cutabc_username: settings.cutabc_username as string,
+      cutabc_password: settings.cutabc_password as string,
+    };
+
     const { period } = await req.json();
     if (!period || !/^\d{4}-\d{2}$/.test(period)) {
       return new Response(
@@ -93,14 +161,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
     // Mark as loading
     await supabase
       .from("cuts_history_backfill")
       .upsert(
-        { period, status: "loading", started_at: new Date().toISOString(), error_message: null, records_loaded: 0 },
-        { onConflict: "period" }
+        { period, tenant_id: tenantId, status: "loading", started_at: new Date().toISOString(), error_message: null, records_loaded: 0 },
+        { onConflict: "period,tenant_id" }
       );
 
     // Full month range
@@ -116,9 +182,9 @@ Deno.serve(async (req) => {
       { from: `${period}-${String(mid + 1).padStart(2, "0")}`, to },
     ];
 
-    console.log(`Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
+    console.log(`[${tenantId}] Backfilling ${period}: ${from} → ${to} (${lastDay} days, 2 halves)`);
 
-    const sessionId = await loginCutABC();
+    const sessionId = await loginCutABC(creds);
 
     // Fetch both halves
     let totalExpected = 0;
@@ -182,6 +248,7 @@ Deno.serve(async (req) => {
       cut_date: d.date,
       total_cuts: 0,
       daily_cuts: d.cuts,
+      tenant_id: tenantId,
     }));
 
     // Upsert in chunks
@@ -190,7 +257,7 @@ Deno.serve(async (req) => {
       const chunk = historyData.slice(i, i + 50);
       const { error } = await supabase
         .from("device_cuts_history")
-        .upsert(chunk, { onConflict: "fixno,cut_date" });
+        .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
       if (error) throw new Error(`Upsert failed: ${error.message}`);
       inserted += chunk.length;
     }
@@ -204,11 +271,13 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
         error_message: null,
       })
-      .eq("period", period);
+      .eq("period", period)
+      .eq("tenant_id", tenantId);
 
     const summary = {
       success: true,
       period,
+      tenant_id: tenantId,
       total_transactions: uniqueTransactions.length,
       expected_transactions: totalExpected,
       consume_transactions: consumeCount,
@@ -217,7 +286,7 @@ Deno.serve(async (req) => {
       daily_records: inserted,
       complete: uniqueTransactions.length >= totalExpected,
     };
-    console.log(`Backfill complete:`, JSON.stringify(summary));
+    console.log(`[${tenantId}] Backfill complete:`, JSON.stringify(summary));
 
     return new Response(JSON.stringify(summary), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -227,11 +296,32 @@ Deno.serve(async (req) => {
     try {
       const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const body = await req.clone().json().catch(() => ({}));
-      if (body.period) {
+      // Try to scope the error update to the tenant if we can recover it from the JWT
+      const authHeader = req.headers.get("Authorization");
+      let tenantId: string | null = null;
+      if (authHeader?.startsWith("Bearer ")) {
+        try {
+          const userClient = createClient(
+            Deno.env.get("SUPABASE_URL")!,
+            Deno.env.get("SUPABASE_ANON_KEY")!,
+            { global: { headers: { Authorization: authHeader } } }
+          );
+          const { data: claimsData } = await userClient.auth.getClaims(
+            authHeader.replace("Bearer ", "")
+          );
+          const uid = claimsData?.claims?.sub as string | undefined;
+          if (uid) {
+            const { data: p } = await supabase.from("profiles").select("tenant_id").eq("id", uid).single();
+            tenantId = (p?.tenant_id as string | null) ?? null;
+          }
+        } catch (_) { /* ignore */ }
+      }
+      if (body.period && tenantId) {
         await supabase
           .from("cuts_history_backfill")
           .update({ status: "error", error_message: error.message })
-          .eq("period", body.period);
+          .eq("period", body.period)
+          .eq("tenant_id", tenantId);
       }
     } catch (_) { /* ignore */ }
 
