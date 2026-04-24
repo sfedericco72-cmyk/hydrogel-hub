@@ -22,6 +22,13 @@ export function useBackfillStatus() {
       if (error) throw error;
       return (data ?? []) as BackfillRecord[];
     },
+    // Poll while at least one period is still loading so the UI updates
+    // automatically when the background backfill finishes.
+    refetchInterval: (query) => {
+      const rows = (query.state.data as BackfillRecord[] | undefined) ?? [];
+      return rows.some((r) => r.status === "loading" || r.status === "pending") ? 3000 : false;
+    },
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -37,6 +44,8 @@ export function useRunBackfill() {
       return data;
     },
     onSuccess: () => {
+      // The function returns 202 immediately; the real work runs in the
+      // background. The polling in useBackfillStatus will pick up completion.
       qc.invalidateQueries({ queryKey: ["backfill-status"] });
       qc.invalidateQueries({ queryKey: ["cuts-history"] });
     },
