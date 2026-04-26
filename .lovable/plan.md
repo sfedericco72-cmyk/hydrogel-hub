@@ -1,3 +1,16 @@
+## 2026-04-26 — Bitec data fix + spike guards
+
+**Problema reportado:** "los números no están bien en Bitec" — abril 2026 mostraba IRONTECH MARIQUINA 1100 con 3451 cortes (su histórico total era 3398, imposible) y FLAPIX con 522 (vs total 449).
+
+**Causa raíz:** El sync del 24/04 escribió en `device_cuts_daily` rows con `total_cuts > 0` para fechas pasadas (no solo `today`) en un INSERT batch único. Para 2 devices Bitec, la primera fila de la serie quedó con `daily_cuts = total_cuts` (~3364 y 435) en `cut_date=2026-04-13` porque la query de baseline (`gt total_cuts 0`) no encontró nada (todo el backfill previo tenía `total_cuts=0`).
+
+**Fix aplicado:**
+1. Data fix puntual: corregidos los 2 rows en `device_cuts_daily` (daily_cuts ajustado a 3 y 4) y recalculado el monthly de Bitec/2026-04 desde la serie limpia.
+2. `sync-cutabc/index.ts`: agregado **SPIKE GUARD** — si `daily_cuts > 200` se fuerza a 0 con warning en logs.
+3. `sync-cutabc/index.ts`: agregado **MONTHLY ANOMALY GUARD** — si el total mensual de un device > su `useqty` histórico, se capea al histórico con error en logs.
+
+Resultado: IRONTECH abril = 90 cortes, FLAPIX abril = 91 cortes (rangos razonables). KLAZ no se tocó (no tenía el problema). Futuras corridas no podrán propagar spikes similares.
+
 
 # Plan: Reparar números de Bitec y blindar el pipeline
 
