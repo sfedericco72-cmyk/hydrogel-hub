@@ -269,16 +269,31 @@ async function syncTenant(
     };
   });
 
-  if (historyData.length > 0) {
-    for (let i = 0; i < historyData.length; i += 50) {
-      const chunk = historyData.slice(i, i + 50);
+  // SANITY CAP: a single hidrogel cutter realistically does at most ~150 cuts/day.
+  // If we ever compute a daily_cuts beyond SANITY_DAILY_CAP it almost certainly
+  // means the previous baseline was wrong (e.g. backfill rows with total_cuts=0
+  // hiding a real prior total). Force the value to 0 and log so we can audit.
+  const SANITY_DAILY_CAP = 200;
+  const safeHistoryData = historyData.map((r) => {
+    if (r.daily_cuts > SANITY_DAILY_CAP) {
+      console.warn(
+        `[${tenantId}] SPIKE GUARD ${r.fixno} ${r.cut_date}: daily_cuts=${r.daily_cuts} > cap ${SANITY_DAILY_CAP} → forcing to 0`,
+      );
+      return { ...r, daily_cuts: 0 };
+    }
+    return r;
+  });
+
+  if (safeHistoryData.length > 0) {
+    for (let i = 0; i < safeHistoryData.length; i += 50) {
+      const chunk = safeHistoryData.slice(i, i + 50);
       const { error } = await supabase
         .from("device_cuts_daily")
         .upsert(chunk, { onConflict: "fixno,cut_date,tenant_id" });
       if (error) console.error(`[${tenantId}] History upsert error: ${error.message}`);
     }
   }
-  console.log(`[${tenantId}] Saved ${historyData.length} daily snapshots for ${today}`);
+  console.log(`[${tenantId}] Saved ${safeHistoryData.length} daily snapshots for ${today}`);
 
   // Increment monthly aggregate for the current month with today's daily_cuts.
   // We re-fetch the canonical monthly total from device_cuts_daily (current
@@ -305,15 +320,32 @@ async function syncTenant(
     total_cuts,
   }));
 
-  if (monthlyRows.length > 0) {
-    for (let i = 0; i < monthlyRows.length; i += 100) {
-      const chunk = monthlyRows.slice(i, i + 100);
+  // SANITY CAP: a single month's total cannot exceed the device's all-time
+  // accumulator (useqty). If it does, the daily series for this month is
+  // corrupted — cap to the device total so downstream views stay sane.
+  const totalByFixno = new Map<string, number>(
+    allDevices.map((d) => [d.fixno, parseInt(d.useqty) || 0]),
+  );
+  const safeMonthlyRows = monthlyRows.map((r) => {
+    const cap = totalByFixno.get(r.fixno);
+    if (cap !== undefined && r.total_cuts > cap) {
+      console.error(
+        `[${tenantId}] MONTHLY ANOMALY ${r.fixno} ${r.year_month}: ${r.total_cuts} > device total ${cap} → capping`,
+      );
+      return { ...r, total_cuts: cap };
+    }
+    return r;
+  });
+
+  if (safeMonthlyRows.length > 0) {
+    for (let i = 0; i < safeMonthlyRows.length; i += 100) {
+      const chunk = safeMonthlyRows.slice(i, i + 100);
       const { error } = await supabase
         .from("device_cuts_monthly")
         .upsert(chunk, { onConflict: "tenant_id,fixno,year_month" });
       if (error) console.error(`[${tenantId}] Monthly upsert error: ${error.message}`);
     }
-    console.log(`[${tenantId}] Updated ${monthlyRows.length} monthly aggregates for ${yearMonth}`);
+    console.log(`[${tenantId}] Updated ${safeMonthlyRows.length} monthly aggregates for ${yearMonth}`);
   }
 
   // Sync transactions
