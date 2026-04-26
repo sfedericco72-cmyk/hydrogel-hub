@@ -130,6 +130,12 @@ export default function BranchDetail() {
   const { data: history = [] } = useCutsHistory(device?.fixno);
   const { data: monthlyHistory = [] } = useMonthlyCuts(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
+  const { data: alertHistory = [], isLoading: alertsLoading } = useAlertHistory(60);
+  const deviceAlerts = useMemo(
+    () => (device?.fixno ? alertHistory.filter((h) => h.fixno === device.fixno) : []),
+    [alertHistory, device?.fixno],
+  );
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const { data: lastCutDates } = useLastCutDates();
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
   const [resolution, setResolution] = useState<TimeResolution>("monthly");
