@@ -131,10 +131,31 @@ export default function BranchDetail() {
   const { data: monthlyHistory = [] } = useMonthlyCuts(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
   const { data: alertHistory = [], isLoading: alertsLoading } = useAlertHistory(60);
-  const deviceAlerts = useMemo(
-    () => (device?.fixno ? alertHistory.filter((h) => h.fixno === device.fixno) : []),
-    [alertHistory, device?.fixno],
-  );
+  // Resolve current PdV id for this device so we can also surface legacy
+  // alerts whose fixno couldn't be resolved (metadata was null and the PdV
+  // had multiple devices, so useAlertHistory left fixno = null).
+  const { data: currentPdvId } = useQuery({
+    queryKey: ["device-current-pdv", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("device_assignments")
+        .select("point_of_sale_id")
+        .eq("device_id", id!)
+        .is("unassigned_at", null)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.point_of_sale_id ?? null;
+    },
+  });
+  const deviceAlerts = useMemo(() => {
+    if (!device?.fixno) return [];
+    return alertHistory.filter(
+      (h) =>
+        h.fixno === device.fixno ||
+        (!h.fixno && currentPdvId != null && h.pdv_id === currentPdvId),
+    );
+  }, [alertHistory, device?.fixno, currentPdvId]);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const { data: lastCutDates } = useLastCutDates();
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
