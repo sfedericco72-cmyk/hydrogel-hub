@@ -63,9 +63,17 @@ export function useAlertHistory(daysBack = 60) {
       });
       // Lookup PdV by fixno (via active assignment)
       const pdvIdByFixno = new Map<string, string>();
+      // Reverse lookup: PdV → list of active fixnos (used to infer fixno
+      // for legacy alerts where metadata is null and message_id is a UUID).
+      const fixnosByPdv = new Map<string, string[]>();
       assigns.forEach((a: any) => {
         const fx = a.devices?.fixno;
-        if (fx && a.point_of_sale_id) pdvIdByFixno.set(fx, a.point_of_sale_id);
+        if (fx && a.point_of_sale_id) {
+          pdvIdByFixno.set(fx, a.point_of_sale_id);
+          const arr = fixnosByPdv.get(a.point_of_sale_id) ?? [];
+          arr.push(fx);
+          fixnosByPdv.set(a.point_of_sale_id, arr);
+        }
       });
       const pdvById = new Map(pos.map(p => [p.id, p]));
 
@@ -120,6 +128,15 @@ export function useAlertHistory(daysBack = 60) {
         }
         if (!pdvId && fixno) {
           pdvId = pdvIdByFixno.get(fixno) || null;
+        }
+
+        // 3. Last-resort fixno: if we resolved a PdV but still have no fixno,
+        // and that PdV has exactly ONE active device assigned, assume it.
+        // Covers legacy alerts (pre-metadata) where the PdV is identified
+        // via recipient_email but the message_id is a UUID.
+        if (!fixno && pdvId) {
+          const fxList = fixnosByPdv.get(pdvId) ?? [];
+          if (fxList.length === 1) fixno = fxList[0];
         }
 
         const pdv = pdvId ? pdvById.get(pdvId) : null;

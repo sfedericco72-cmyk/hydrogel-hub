@@ -1,43 +1,73 @@
+## Objetivo
+Asegurar que el historial de alertas muestre las alertas viejas (donde `metadata` está vacío) y mejorar el fallback para resolver `fixno`/`pdv` sin depender solo de metadata.
+
+## Diagnóstico confirmado
+- Las alertas del **20-abr-2026** tienen `metadata: null` en `email_send_log` y `message_id` es un UUID puro (no contiene el fixno).
+- `useAlertHistory.ts` actualmente intenta resolver `fixno` desde `metadata.fixno` o desde un regex sobre `message_id` con formato `template-fixno-fecha`. Como ninguno aplica, `fixno = null` y la fila no aparece en el historial filtrado por equipo.
+- Las alertas **nuevas** (a partir del despliegue del check-alerts con `baseMetadata`) ya quedan con metadata correcta — ese flujo está OK. El problema es solo histórico.
+
 ## Cambios
 
-### 1. Equipos sin asignar — mostrar estado Activo/Inactivo
-Objetivo: que ningún equipo activo quede sin asignar. Hoy en la sección "Equipos sin asignar" (Setup) sólo se muestra el ícono de Wi-Fi (online en últimos 60 min), pero no la actividad (cortes en últimos 3 meses).
+### 1. Mejorar el fallback de resolución en `useAlertHistory.ts`
+Cuando `metadata` está vacío y el regex sobre `message_id` no matchea, agregar un tercer paso de resolución:
 
-Cambios en `UnassignedDevicesSection.tsx`:
-- Mostrar un badge **Activo** (verde) o **Inactivo** (gris) al lado de cada equipo, usando la misma definición que el resto de la app: cortes en los últimos 3 meses (`getActivityState` + `useLastCutDates`).
-- Agregar un filtro arriba: **Todos / Activos / Inactivos**, junto al filtro de estado/condición ya existente.
-- Mostrar el contador del header dividido: "Equipos sin asignar (12 · 3 activos)" para que el problema sea visible de un vistazo.
-- Por defecto ordenar primero los **Activos** (son los que urgen asignar).
+- **Resolver PdV por `recipient_email`** (ya existe esa lógica, pero solo se usaba como respaldo de `pdv_id`).
+- Si el `recipient_email` corresponde al `bcc_email` del tenant (caso `email-no-configurado`), no se puede resolver PdV por email → quedar con `pdv_name = null`.
+- **Resolver `fixno` desde el PdV resuelto**: si el PdV tiene exactamente **un** equipo activo asignado, asumir ese fixno. Si tiene varios, dejar `fixno = null` (no podemos adivinar).
 
-Cambios en `useUnassignedDevices` (`src/hooks/useClients.ts`):
-- Agregar al `select` los campos necesarios para activity (`total_cuts` ya viene; necesitamos cruzar con `device_cuts_daily` vía el hook `useLastCutDates`, que ya existe — lo consumimos en el componente, sin tocar el hook).
+Esto cubre el caso típico: 1 PdV = 1 equipo. Para HX007190821143217 → PdV `San_Cristobal_Inversiones` tiene solo ese equipo asignado → la alerta del 20-abr aparecerá en el historial del equipo.
 
-### 2. Historial de alertas en la página del equipo
-Objetivo: poder ver las alertas enviadas para un equipo específico desde su pantalla de detalle (la del screenshot: "Vivocell Olmue – Luzmira Muza Vera").
-
-Cambios en `BranchDetail.tsx`:
-- Agregar una nueva sección colapsable **HISTORIAL DE ALERTAS** (con el mismo estilo que "HISTORIAL DE RECARGAS") debajo del gráfico de cortes y arriba/al lado del historial de recargas.
-- Reutilizar el componente `AlertHistoryTable` y el hook `useAlertHistory(60)`, filtrando las entradas por `fixno === device.fixno`.
-- Header con ícono de campana, label "Historial de alertas" y badge con la cantidad (ej: "3 alertas").
-- Si no hay alertas para ese equipo en los últimos 60 días, mostrar mensaje vacío: "Este equipo no tiene alertas enviadas en los últimos 60 días."
-- Columnas: Fecha, Tipo (stock bajo / desconectado / sin email), Estado (enviado / falló / etc.). Ocultar columnas Cliente/PdV/Equipo (`showClient={false}` y dejar el resto sin redundancia ya que estamos en la vista del equipo).
-
-Pequeño ajuste a `AlertHistoryTable.tsx`:
-- Agregar prop opcional `showFixno?: boolean` (default `true`) para poder ocultar la columna Equipo cuando ya estamos viendo un único equipo.
-
-### Detalles técnicos
-
-**Filtrado por fixno en AlertHistory**: el hook `useAlertHistory` ya enriquece cada entrada con `fixno` (extraído de `metadata.fixno` o parseado del `message_id`). Filtramos en el componente con `useMemo`:
+### 2. Mostrar alertas "huérfanas" en el historial del PdV
+En `BranchDetail.tsx` el filtro actual es:
 ```ts
-const filtered = useMemo(
-  () => history.filter(h => h.fixno === device.fixno),
-  [history, device.fixno]
-);
+history.filter(h => h.fixno === device.fixno)
+```
+Cambiarlo a:
+```ts
+history.filter(h => h.fixno === device.fixno || (h.pdv_id === pdvId && !h.fixno))
+```
+Para que las viejas (donde no se pudo resolver fixno pero sí PdV) aparezcan también en el detalle del equipo cuando el PdV solo tiene ese equipo.
+
+### 3. (Opcional, recomendado) Backfill de metadata
+Ejecutar un INSERT/UPDATE one-shot vía `supabase--execute_sql` para rellenar `metadata` de las filas viejas donde podamos resolver `pdv_id` y `fixno` por email + asignación activa. Esto deja la base "limpia" y no depende del fallback en runtime.
+
+Solo aplicaría a alertas con `template_name IN ('stock-bajo','dispositivo-desconectado')` y donde `metadata IS NULL`. Para `email-no-configurado` (que va a BCC) habría que parsear `message_id` con el formato viejo `no-email-{stock|desconectado}-{fixno}-{fecha}` si existe — si no, dejarlas como están.
+
+## Detalles técnicos
+**Archivo `src/hooks/useAlertHistory.ts` — bloque enriquecido:**
+```ts
+// Nuevo: si tras resolver pdv aún no tenemos fixno, intentar inferirlo
+// desde la asignación única del PdV.
+const pdvFixnos = new Map<string, string[]>(); // pdv_id → fixnos activos
+assigns.forEach((a: any) => {
+  const fx = a.devices?.fixno;
+  if (fx && a.point_of_sale_id) {
+    const arr = pdvFixnos.get(a.point_of_sale_id) ?? [];
+    arr.push(fx);
+    pdvFixnos.set(a.point_of_sale_id, arr);
+  }
+});
+// ...dentro del map de enrichment, después de resolver pdvId:
+if (!fixno && pdvId) {
+  const fxList = pdvFixnos.get(pdvId) ?? [];
+  if (fxList.length === 1) fixno = fxList[0];
+}
 ```
 
-**Activity badge en sin asignar**: usamos `getActivityState(device, lastCutDates)` que devuelve `"active" | "inactive"`. Esto requiere pasar también `total_cuts`/`fixno` al select del hook (fixno ya está). El cálculo es client-side con el map de `useLastCutDates`.
+**Archivo `src/pages/BranchDetail.tsx` — filtro:**
+```ts
+const filtered = useMemo(() => {
+  return alertHistory.filter(h =>
+    h.fixno === device.fixno ||
+    (h.pdv_id === pdvId && !h.fixno && pdvFixnos.length === 1)
+  );
+}, [alertHistory, device.fixno, pdvId]);
+```
+(Necesito verificar de dónde viene `pdvId` en ese componente; probablemente del `useAssignedHierarchy` o de la asignación activa del device.)
 
-### Fuera de alcance
-- No se modifica el backend ni edge functions.
-- No se cambian otras tarjetas de la página de detalle.
-- No se agregan nuevas alertas ni cambia la lógica de envío.
+## Lo que NO se hace
+- No tocar `send-transactional-email` ni `process-email-queue` — ya persisten metadata correctamente.
+- No tocar `check-alerts` — ya envía con `baseMetadata`.
+
+## ¿Hago también el backfill de metadata?
+Es una opción "extra" que limpia la base. Recomiendo hacerlo después de validar que el fallback en runtime funciona — así no rompemos nada.
