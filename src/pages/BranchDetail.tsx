@@ -390,6 +390,36 @@ export default function BranchDetail() {
           )}
         </div>
 
+        {/* Alert History */}
+        <div className="mb-6 rounded-lg border border-border bg-card p-4">
+          <button
+            type="button"
+            onClick={() => setAlertsOpen((v) => !v)}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            <Bell className="h-5 w-5 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Historial de alertas
+            </h2>
+            <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              {deviceAlerts.length} {deviceAlerts.length === 1 ? "alerta" : "alertas"} (60d)
+              <span className="text-muted-foreground/60">{alertsOpen ? "▾" : "▸"}</span>
+            </span>
+          </button>
+          {alertsOpen && (
+            <div className="mt-4">
+              <AlertHistoryTable
+                entries={deviceAlerts}
+                isLoading={alertsLoading}
+                showClient={false}
+                showFixno={false}
+                pageSize={20}
+                emptyMessage="Este equipo no tiene alertas enviadas en los últimos 60 días."
+              />
+            </div>
+          )}
+        </div>
+
         {/* Transactions / Reloads History */}
         <div className="mb-6 rounded-lg border border-border bg-card p-4">
           <div className="mb-4 flex items-center gap-2">
