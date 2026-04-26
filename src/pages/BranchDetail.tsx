@@ -3,11 +3,13 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CutsTrafficLights, ConnectionTrafficLight } from "@/components/TrafficLights";
 import {
   ArrowLeft, Scissors,
-  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw
+  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw, Bell
 } from "lucide-react";
 import { useDevice, useLastCutDates, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, getDisconnectionDays, ACTIVITY_LABELS } from "@/hooks/useDevices";
 import { useCutsHistory, useMonthlyCuts } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
+import { useAlertHistory } from "@/hooks/useAlertHistory";
+import { AlertHistoryTable } from "@/components/AlertHistoryTable";
 import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
@@ -128,6 +130,12 @@ export default function BranchDetail() {
   const { data: history = [] } = useCutsHistory(device?.fixno);
   const { data: monthlyHistory = [] } = useMonthlyCuts(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
+  const { data: alertHistory = [], isLoading: alertsLoading } = useAlertHistory(60);
+  const deviceAlerts = useMemo(
+    () => (device?.fixno ? alertHistory.filter((h) => h.fixno === device.fixno) : []),
+    [alertHistory, device?.fixno],
+  );
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const { data: lastCutDates } = useLastCutDates();
   const { data: monthlyCutsMap } = useMonthlyCutsMap();
   const [resolution, setResolution] = useState<TimeResolution>("monthly");
@@ -378,6 +386,36 @@ export default function BranchDetail() {
           ) : (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
               Sin datos históricos aún. Se generarán con cada sincronización.
+            </div>
+          )}
+        </div>
+
+        {/* Alert History */}
+        <div className="mb-6 rounded-lg border border-border bg-card p-4">
+          <button
+            type="button"
+            onClick={() => setAlertsOpen((v) => !v)}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            <Bell className="h-5 w-5 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Historial de alertas
+            </h2>
+            <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              {deviceAlerts.length} {deviceAlerts.length === 1 ? "alerta" : "alertas"} (60d)
+              <span className="text-muted-foreground/60">{alertsOpen ? "▾" : "▸"}</span>
+            </span>
+          </button>
+          {alertsOpen && (
+            <div className="mt-4">
+              <AlertHistoryTable
+                entries={deviceAlerts}
+                isLoading={alertsLoading}
+                showClient={false}
+                showFixno={false}
+                pageSize={20}
+                emptyMessage="Este equipo no tiene alertas enviadas en los últimos 60 días."
+              />
             </div>
           )}
         </div>

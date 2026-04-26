@@ -15,7 +15,7 @@ import {
   DEVICE_CONDITION_VALUES,
   type DeviceCondition,
 } from "@/hooks/useClients";
-import { isOnline } from "@/hooks/useDevices";
+import { isOnline, useLastCutDates, getActivityState, type ActivityState } from "@/hooks/useDevices";
 
 const conditionStyle: Record<DeviceCondition, string> = {
   nuevo: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -118,15 +118,26 @@ export function UnassignedDevicesSection({ searchQuery = "", onAssign, defaultEx
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [localSearch, setLocalSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<string>("_all");
+  const [activityFilter, setActivityFilter] = useState<"all" | ActivityState>("all");
   const { data: devices = [], isLoading } = useUnassignedDevices();
+  const { data: lastCutDates } = useLastCutDates();
+
+  const activeCount = useMemo(
+    () => devices.filter((d: any) => getActivityState(d as any, lastCutDates) === "active").length,
+    [devices, lastCutDates],
+  );
 
   const effectiveSearch = (searchQuery || localSearch).toLowerCase().trim();
 
   const filtered = useMemo(() => {
-    return devices.filter((d: any) => {
+    const filteredList = devices.filter((d: any) => {
       if (conditionFilter !== "_all") {
         if (conditionFilter === "_none" && d.condition) return false;
         if (conditionFilter !== "_none" && d.condition !== conditionFilter) return false;
+      }
+      if (activityFilter !== "all") {
+        const state = getActivityState(d as any, lastCutDates);
+        if (state !== activityFilter) return false;
       }
       if (!effectiveSearch) return true;
       return (
@@ -135,7 +146,14 @@ export function UnassignedDevicesSection({ searchQuery = "", onAssign, defaultEx
         d.customer_name?.toLowerCase().includes(effectiveSearch)
       );
     });
-  }, [devices, effectiveSearch, conditionFilter]);
+    // Sort: active devices first (they urgently need to be assigned)
+    return [...filteredList].sort((a, b) => {
+      const aActive = getActivityState(a as any, lastCutDates) === "active" ? 0 : 1;
+      const bActive = getActivityState(b as any, lastCutDates) === "active" ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return (a.fixno || "").localeCompare(b.fixno || "");
+    });
+  }, [devices, effectiveSearch, conditionFilter, activityFilter, lastCutDates]);
 
   // Auto-expand if global search matches something here
   const shouldShow = expanded || (searchQuery && filtered.length > 0);
@@ -152,13 +170,18 @@ export function UnassignedDevicesSection({ searchQuery = "", onAssign, defaultEx
           <Cpu className="w-4 h-4 text-primary" />
           <span className="font-medium text-sm">Equipos sin asignar</span>
           <Badge variant="secondary" className="text-xs">{devices.length}</Badge>
+          {activeCount > 0 && (
+            <Badge className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20">
+              {activeCount} {activeCount === 1 ? "activo" : "activos"}
+            </Badge>
+          )}
         </div>
       </button>
 
       {shouldShow && (
         <div className="px-4 pb-4 space-y-3">
           {!searchQuery && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -168,6 +191,16 @@ export function UnassignedDevicesSection({ searchQuery = "", onAssign, defaultEx
                   className="pl-9 h-9"
                 />
               </div>
+              <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as any)}>
+                <SelectTrigger className="w-[140px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toda actividad</SelectItem>
+                  <SelectItem value="active">Sólo activos</SelectItem>
+                  <SelectItem value="inactive">Sólo inactivos</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={conditionFilter} onValueChange={setConditionFilter}>
                 <SelectTrigger className="w-[180px] h-9">
                   <SelectValue />
@@ -193,6 +226,7 @@ export function UnassignedDevicesSection({ searchQuery = "", onAssign, defaultEx
             <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
               {filtered.map((d: any) => {
                 const online = isOnline(d);
+                const activity = getActivityState(d as any, lastCutDates);
                 return (
                   <div
                     key={d.id}
@@ -205,6 +239,21 @@ export function UnassignedDevicesSection({ searchQuery = "", onAssign, defaultEx
                         <WifiOff className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                       )}
                       <span className="text-sm font-mono shrink-0">{d.fixno}</span>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] px-1.5 py-0 h-5 shrink-0 ${
+                          activity === "active"
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-muted text-muted-foreground border-border"
+                        }`}
+                        title={
+                          activity === "active"
+                            ? "Tuvo cortes en los últimos 3 meses"
+                            : "Sin cortes en los últimos 3 meses"
+                        }
+                      >
+                        {activity === "active" ? "Activo" : "Inactivo"}
+                      </Badge>
                       <span className="text-xs text-muted-foreground truncate">
                         {d.branch_name || d.customer_name || "Sin nombre"}
                       </span>

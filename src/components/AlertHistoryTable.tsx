@@ -7,6 +7,7 @@ interface Props {
   entries: AlertHistoryEntry[];
   isLoading?: boolean;
   showClient?: boolean; // If true, shows the Client column (used in global view)
+  showFixno?: boolean; // If true, shows the Equipo column (default true)
   pageSize?: number;
   emptyMessage?: string;
 }
@@ -27,7 +28,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: any; className: strin
   suppressed: { label: "Bloqueado", icon: XCircle, className: "bg-muted text-muted-foreground border-border" },
 };
 
-export function AlertHistoryTable({ entries, isLoading, showClient = true, pageSize = 50, emptyMessage }: Props) {
+export function AlertHistoryTable({ entries, isLoading, showClient = true, showFixno = true, pageSize = 50, emptyMessage }: Props) {
   const [page, setPage] = useState(0);
 
   const paged = useMemo(() => {
@@ -59,7 +60,7 @@ export function AlertHistoryTable({ entries, isLoading, showClient = true, pageS
               <th className="px-3 py-2 text-left font-medium">Tipo</th>
               {showClient && <th className="px-3 py-2 text-left font-medium">Cliente</th>}
               <th className="px-3 py-2 text-left font-medium">PdV</th>
-              <th className="px-3 py-2 text-left font-medium">Equipo</th>
+              {showFixno && <th className="px-3 py-2 text-left font-medium">Equipo</th>}
               <th className="px-3 py-2 text-left font-medium">Estado</th>
             </tr>
           </thead>
@@ -88,7 +89,9 @@ export function AlertHistoryTable({ entries, isLoading, showClient = true, pageS
                     <td className="px-3 py-2 text-xs">{entry.client_name ?? <span className="text-muted-foreground italic">—</span>}</td>
                   )}
                   <td className="px-3 py-2 text-xs">{entry.pdv_name ?? <span className="text-muted-foreground italic">—</span>}</td>
-                  <td className="px-3 py-2 text-xs font-mono">{entry.fixno ?? <span className="text-muted-foreground italic font-sans">—</span>}</td>
+                  {showFixno && (
+                    <td className="px-3 py-2 text-xs font-mono">{entry.fixno ?? <span className="text-muted-foreground italic font-sans">—</span>}</td>
+                  )}
                   <td className="px-3 py-2">
                     <div className={cn("inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs", status.className)}>
                       <StatusIcon className="h-3 w-3" />
