@@ -1,127 +1,95 @@
-## 2026-04-26 — Bitec data fix + spike guards
+## Objetivo
 
-**Problema reportado:** "los números no están bien en Bitec" — abril 2026 mostraba IRONTECH MARIQUINA 1100 con 3451 cortes (su histórico total era 3398, imposible) y FLAPIX con 522 (vs total 449).
+Tener una forma simple, repetible y autoservicio de **controlar los totales mensuales por equipo** que muestra el sistema, comparándolos contra el archivo "fuente de verdad" que CutABC permite exportar (el mismo formato del CSV `marzo2026_2.csv` que subiste: `Device NO, Device Name, Customer Name, Usage Count, Remark`).
 
-**Causa raíz:** El sync del 24/04 escribió en `device_cuts_daily` rows con `total_cuts > 0` para fechas pasadas (no solo `today`) en un INSERT batch único. Para 2 devices Bitec, la primera fila de la serie quedó con `daily_cuts = total_cuts` (~3364 y 435) en `cut_date=2026-04-13` porque la query de baseline (`gt total_cuts 0`) no encontró nada (todo el backfill previo tenía `total_cuts=0`).
+La idea: subir un archivo del mes → ver tabla comparativa equipo por equipo → identificar desvíos al instante.
 
-**Fix aplicado:**
-1. Data fix puntual: corregidos los 2 rows en `device_cuts_daily` (daily_cuts ajustado a 3 y 4) y recalculado el monthly de Bitec/2026-04 desde la serie limpia.
-2. `sync-cutabc/index.ts`: agregado **SPIKE GUARD** — si `daily_cuts > 200` se fuerza a 0 con warning en logs.
-3. `sync-cutabc/index.ts`: agregado **MONTHLY ANOMALY GUARD** — si el total mensual de un device > su `useqty` histórico, se capea al histórico con error en logs.
+---
 
-Resultado: IRONTECH abril = 90 cortes, FLAPIX abril = 91 cortes (rangos razonables). KLAZ no se tocó (no tenía el problema). Futuras corridas no podrán propagar spikes similares.
+## Cómo funciona desde el usuario
 
+Nueva tab dentro de **Setup → "Control de cortes"**:
 
-# Plan: Reparar números de Bitec y blindar el pipeline
+1. **Seleccionar período** (mes/año). Default: mes anterior.
+2. **Subir CSV** exportado de CutABC con totales del mes (mismo formato que ya tenés).
+3. La app:
+   - Parsea el CSV en el navegador (sin enviar a backend, sin guardar archivo).
+   - Cruza por `Device NO` (= `fixno`) contra `device_cuts_monthly` del tenant para ese período.
+4. Muestra una **tabla comparativa**:
 
-## Diagnóstico
+   ```text
+   Equipo            | CutABC (real) | Sistema | Diferencia | Estado
+   IRONTECH MARIQ.   |     118       |   115   |    -3      | ⚠ Menor
+   VIVOCELL OLMUE    |      86       |    86   |     0      | ✓ OK
+   FLAPIX            |      34       |   435   |  +401      | 🚨 Spike
+   (no en sistema)   |      21       |    -    |    -       | ❓ Falta
+   ```
 
-Bitec tiene **2 dispositivos con cortes diarios falsos** que rompen los totales mensuales y de 6 meses en el dashboard:
+5. Resumen arriba: **Total real vs Total sistema**, % de exactitud, cantidad de equipos OK / con desvíos / faltantes.
+6. Botón **"Exportar comparativa CSV"** para guardar registro.
 
-| fixno | sucursal | día corrupto | daily_cuts visto | daily_cuts real |
-|---|---|---|---|---|
-| HX003190821144513 | IRONTECH MARIQUINA 1100 | 2026-04-13 | 3364 | ~3-5 |
-| HX002150621093339 | FLAPIX - Victor Romero | 2026-04-13 | 435 | ~3-5 |
+Sin guardar nada en la base por ahora — es una herramienta de QA, no un proceso de corrección automática.
 
-Esto hace que IRONTECH aparezca con **3451 cortes en abril** cuando su histórico total es 3398 (imposible), y FLAPIX con **522** cuando el total es 449.
+---
 
-### Causa raíz
+## Reglas de cruce
 
-Cuando el sync corrió por primera vez después del rediseño (2026-04-24 20:47), insertó en `device_cuts_daily` rows con `total_cuts > 0` **para fechas pasadas** (13/04 a 23/04) en un solo INSERT batch — todos comparten el mismo timestamp al microsegundo. Para esos 2 devices la primera fila de la serie quedó con `daily_cuts = total_cuts` (en vez de 0), ya que no había baseline previo con `total_cuts > 0` (el backfill 2026-01 había insertado todo con `total_cuts=0`). El bug es un caso borde en el cálculo de `daily_cuts` cuando coincide:
-1. Backfill previo con `total_cuts = 0`.
-2. Primer sync que escribe varias fechas a la vez en lugar de solo `today`.
-3. La query de baseline (`gt("total_cuts", 0)`) no encuentra nada y el código defensivo de la línea 261 solo cubre el caso `prevTotal === undefined` para `today`, no para fechas pasadas.
+- **Match key**: `Device NO` del CSV ↔ `fixno` en `device_cuts_monthly`.
+- **Período**: el CSV no trae fecha → el usuario elige el mes en el selector. Se filtra `device_cuts_monthly` por `year_month = 'YYYY-MM'` y `tenant_id`.
+- **Tolerancia configurable** (default ±2 cortes): debajo de eso = ✓ OK, arriba = ⚠ desvío, >100 = 🚨 spike sospechoso.
+- **Equipos en CSV pero no en sistema** → fila "Falta en sistema".
+- **Equipos en sistema pero no en CSV** → fila "Falta en CutABC export" (puede pasar si el equipo no tuvo cortes en CutABC pero sí registros viejos).
 
-KLAZ no tiene el problema (los devices ahí siempre tuvieron `total_cuts > 0` en daily porque venían del sync viejo, que escribía total_cuts).
+---
 
-## Solución
+## Dónde se ubica
 
-### 1. Limpiar los datos corruptos (data fix puntual)
+Dentro de `src/pages/Setup.tsx`, agregar una nueva sección colapsable **"Control de cortes"** al final, junto a "Carga histórica" — no necesita ruta nueva, mantiene todo en un solo lugar.
 
-Migración SQL que:
-- En `device_cuts_daily`, para Bitec, fija `daily_cuts` de los 2 rows corruptos a un valor razonable basado en el `total_cuts` del día anterior siguiente (interpolando):
-  - HX003190821144513 / 2026-04-13: `daily_cuts = 3` (entre 4 del 12 y 3 del 14)
-  - HX002150621093339 / 2026-04-13: `daily_cuts = 4` (entre 4 del 12 y 3 del 14)
-- También ajusta `total_cuts` de los 2 rows del 13/04 a un valor consistente (no afecta daily_cuts del 14+, porque la fórmula de daily ya no se recalcula para días pasados).
-- Recalcula `device_cuts_monthly` para Bitec / 2026-04 sumando los `daily_cuts` corregidos del mes.
+Si en el futuro querés un tab dedicado tipo `/setup?tab=control`, es un refactor menor; por ahora una sección más alcanza y es más simple.
 
-### 2. Blindar el sync para futuros casos (preventivo)
-
-Modificar `supabase/functions/sync-cutabc/index.ts` para:
-
-**a) Sanity check anti-spike al insertar daily:**
-Antes de hacer el upsert en `device_cuts_daily` (línea ~272), si `daily_cuts > max(promedio_30d * 10, 200)` para ese fixno, log un warning y reemplaza `daily_cuts` por `0`. Es una salvaguarda barata: ningún device real corta más de 200 hidrogeles en un día.
-
-**b) Validación cruzada del monthly:**
-Al construir `monthlyRows` (línea ~301), si `total_cuts > devices.total_cuts` para ese fixno (matemáticamente imposible: 1 mes no puede superar el histórico), log un error y cap `total_cuts = devices.total_cuts`. Esto evita que un dato dañado en daily se propague a monthly.
-
-**c) Defensa en el cálculo de baseline (línea 242-262):**
-La query actual usa `gt("total_cuts", 0)`. Cuando todos los rows previos vienen del backfill (total_cuts=0), no hay baseline y devuelve `dailyCuts = 0` para today, lo cual es correcto. Pero si el sync alguna vez escribiera fechas pasadas (no debería, pero pasó), el cálculo se rompe. Vamos a:
-  - Asegurar que el sync **solo escriba `cut_date = today`** (es lo que hace ya — vamos a dejar un comment explícito y un assert).
-  - Si `prevTotal === undefined` Y `currentTotal > 0`, en vez de `dailyCuts = 0` usar el `cuts_today` que retorna la API (campo `usedayqty` de CutABC) cuando esté disponible y sea ≤ 200.
-
-### 3. Cleanup script de detección
-
-Edge function `detect-data-anomalies/index.ts` (nueva, opcional invocada manual) que escanea `device_cuts_daily` por tenant buscando `daily_cuts > 200` o `daily_cuts > device.total_cuts * 0.3` y los reporta. No corrige automáticamente — solo lista para revisión manual. Útil cuando aparezcan tenants nuevos.
+---
 
 ## Detalles técnicos
 
-```sql
--- Migración (data fix puntual)
-UPDATE device_cuts_daily
-SET daily_cuts = 3, total_cuts = 3367 - 3
-WHERE tenant_id = 'c10e00fe-c1f6-423e-85db-8996c65dc1b6'
-  AND fixno = 'HX003190821144513' AND cut_date = '2026-04-13';
+**Archivos nuevos / modificados:**
 
-UPDATE device_cuts_daily
-SET daily_cuts = 4, total_cuts = 438 - 3
-WHERE tenant_id = 'c10e00fe-c1f6-423e-85db-8996c65dc1b6'
-  AND fixno = 'HX002150621093339' AND cut_date = '2026-04-13';
+- `src/pages/Setup.tsx` → agregar `<NumberControlSection />` al final del stack.
+- `src/components/NumberControlSection.tsx` (nuevo) → toda la UI: selector de mes, file input, tabla, resumen, export.
+- `src/hooks/useMonthlyCutsForControl.ts` (nuevo) → query a `device_cuts_monthly` filtrando por `tenant_id` + `year_month`, joineada con `devices` para traer `branch_name` (más útil que `fixno` solo).
+- `src/lib/cutsControl.ts` (nuevo) → funciones puras: `parseCutabcCsv()`, `compareCuts()`, `exportComparisonCsv()`. Testeable sin React.
 
--- Recomputar monthly de abril Bitec
-WITH mtd AS (
-  SELECT fixno, SUM(daily_cuts) AS total_cuts
-  FROM device_cuts_daily
-  WHERE tenant_id = 'c10e00fe-c1f6-423e-85db-8996c65dc1b6'
-    AND cut_date >= '2026-04-01' AND cut_date < '2026-05-01' AND daily_cuts > 0
-  GROUP BY fixno
-)
-UPDATE device_cuts_monthly m
-SET total_cuts = mtd.total_cuts, updated_at = now()
-FROM mtd
-WHERE m.tenant_id = 'c10e00fe-c1f6-423e-85db-8996c65dc1b6'
-  AND m.year_month = '2026-04' AND m.fixno = mtd.fixno;
-```
+**Parsing CSV:**
 
-```typescript
-// Sanity check en sync-cutabc/index.ts (después de línea 270)
-const SANITY_DAILY_CAP = 200;
-const cleanedHistoryData = historyData.map(r => {
-  if (r.daily_cuts > SANITY_DAILY_CAP) {
-    console.warn(`[${tenantId}] SPIKE detected ${r.fixno} ${r.cut_date}: daily_cuts=${r.daily_cuts} → forcing 0`);
-    return { ...r, daily_cuts: 0 };
-  }
-  return r;
-});
-```
+- Usar parser simple manual (regex) o agregar `papaparse` (~7KB gz). Voto por `papaparse` porque maneja BOM (el CSV subido tiene `\ufeff`), comillas, escapes, etc. sin dolor.
+- Columnas requeridas: `Device NO`, `Usage Count`. Las demás se ignoran.
+- Validar formato; si falla, mostrar error claro ("El archivo no parece ser un export de CutABC. Esperaba columnas Device NO y Usage Count").
 
-```typescript
-// Cap monthly por total histórico del device (después de línea 306)
-const totalByFixno = new Map(allDevices.map(d => [d.fixno, parseInt(d.useqty) || 0]));
-const cappedMonthlyRows = monthlyRows.map(r => {
-  const cap = totalByFixno.get(r.fixno) ?? Infinity;
-  if (r.total_cuts > cap) {
-    console.error(`[${tenantId}] Monthly anomaly ${r.fixno} ${r.year_month}: ${r.total_cuts} > device total ${cap}`);
-    return { ...r, total_cuts: cap };
-  }
-  return r;
-});
-```
+**Sin cambios de backend:**
 
-## Resultado esperado
+- No nuevas tablas, no edge functions, no RLS. Solo lectura de `device_cuts_monthly` (que ya tiene RLS por tenant).
+- Toda la lógica corre en el cliente.
 
-- IRONTECH abril 2026: **~28 cortes** (en vez de 3451) — match con la realidad.
-- FLAPIX abril 2026: **~22 cortes** (en vez de 522).
-- Totales 6m del dashboard recuperan coherencia.
-- KLAZ no se toca (no tiene el problema).
-- Futuras corridas del sync no podrán propagar spikes similares gracias a los 2 sanity checks.
+**UX**:
+
+- Estados visuales: verde (OK), amarillo (desvío menor), rojo (spike), gris (faltante).
+- Ordenar por mayor desvío absoluto al tope para que los problemas salten a la vista.
+- Mostrar también el `Customer Name` del CSV para que el usuario reconozca rápido.
+
+---
+
+## Por qué este enfoque
+
+- **Multi-tenant nativo**: cada usuario ve solo sus propios `device_cuts_monthly` por RLS, sin código extra.
+- **Sin acoplamiento a CutABC**: si mañana el formato del export cambia, solo tocás `parseCutabcCsv()`.
+- **No invasivo**: no escribe nada, no rompe nada, no consume API de CutABC. Pura inspección.
+- **Reutilizable**: el mismo flujo sirve para auditar abril, mayo, etc., y para validar después de cada `sync-cutabc` o backfill.
+- **Base para más**: si en el futuro querés que detecte automáticamente y genere alertas, ya tenés la lógica de comparación lista en `src/lib/cutsControl.ts`.
+
+---
+
+## Fuera de alcance (decisiones explícitas)
+
+- **No corrige automáticamente** los datos del sistema. Si hay desvíos, vos decidís qué hacer (forzar sync, ajustar manualmente, investigar).
+- **No guarda historial de auditorías** en la base. Si querés eso después, agregamos una tabla `cuts_audit_log` — pero por ahora KISS.
+- **No soporta CSV con cortes diarios**. Solo totales mensuales por equipo (que es lo que CutABC exporta cómodamente).

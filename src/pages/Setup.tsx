@@ -5,6 +5,7 @@ import { useTenantSettings, useUpdateTenantSettings } from "@/hooks/useTenantSet
 import { useBackfillStatus, useRunBackfill } from "@/hooks/useBackfillHistory";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { NumberControlSection } from "@/components/NumberControlSection";
 
 const TIMEZONES = [
   { value: "America/Santiago", label: "Santiago de Chile (GMT-3/-4)" },
@@ -202,6 +203,9 @@ export default function Setup() {
 
           {/* Backfill */}
           <BackfillSection />
+
+          {/* Control de números */}
+          <NumberControlSection />
 
         </div>
       </div>
