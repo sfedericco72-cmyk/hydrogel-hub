@@ -1,95 +1,43 @@
-## Objetivo
+## Cambios
 
-Tener una forma simple, repetible y autoservicio de **controlar los totales mensuales por equipo** que muestra el sistema, comparándolos contra el archivo "fuente de verdad" que CutABC permite exportar (el mismo formato del CSV `marzo2026_2.csv` que subiste: `Device NO, Device Name, Customer Name, Usage Count, Remark`).
+### 1. Equipos sin asignar — mostrar estado Activo/Inactivo
+Objetivo: que ningún equipo activo quede sin asignar. Hoy en la sección "Equipos sin asignar" (Setup) sólo se muestra el ícono de Wi-Fi (online en últimos 60 min), pero no la actividad (cortes en últimos 3 meses).
 
-La idea: subir un archivo del mes → ver tabla comparativa equipo por equipo → identificar desvíos al instante.
+Cambios en `UnassignedDevicesSection.tsx`:
+- Mostrar un badge **Activo** (verde) o **Inactivo** (gris) al lado de cada equipo, usando la misma definición que el resto de la app: cortes en los últimos 3 meses (`getActivityState` + `useLastCutDates`).
+- Agregar un filtro arriba: **Todos / Activos / Inactivos**, junto al filtro de estado/condición ya existente.
+- Mostrar el contador del header dividido: "Equipos sin asignar (12 · 3 activos)" para que el problema sea visible de un vistazo.
+- Por defecto ordenar primero los **Activos** (son los que urgen asignar).
 
----
+Cambios en `useUnassignedDevices` (`src/hooks/useClients.ts`):
+- Agregar al `select` los campos necesarios para activity (`total_cuts` ya viene; necesitamos cruzar con `device_cuts_daily` vía el hook `useLastCutDates`, que ya existe — lo consumimos en el componente, sin tocar el hook).
 
-## Cómo funciona desde el usuario
+### 2. Historial de alertas en la página del equipo
+Objetivo: poder ver las alertas enviadas para un equipo específico desde su pantalla de detalle (la del screenshot: "Vivocell Olmue – Luzmira Muza Vera").
 
-Nueva tab dentro de **Setup → "Control de cortes"**:
+Cambios en `BranchDetail.tsx`:
+- Agregar una nueva sección colapsable **HISTORIAL DE ALERTAS** (con el mismo estilo que "HISTORIAL DE RECARGAS") debajo del gráfico de cortes y arriba/al lado del historial de recargas.
+- Reutilizar el componente `AlertHistoryTable` y el hook `useAlertHistory(60)`, filtrando las entradas por `fixno === device.fixno`.
+- Header con ícono de campana, label "Historial de alertas" y badge con la cantidad (ej: "3 alertas").
+- Si no hay alertas para ese equipo en los últimos 60 días, mostrar mensaje vacío: "Este equipo no tiene alertas enviadas en los últimos 60 días."
+- Columnas: Fecha, Tipo (stock bajo / desconectado / sin email), Estado (enviado / falló / etc.). Ocultar columnas Cliente/PdV/Equipo (`showClient={false}` y dejar el resto sin redundancia ya que estamos en la vista del equipo).
 
-1. **Seleccionar período** (mes/año). Default: mes anterior.
-2. **Subir CSV** exportado de CutABC con totales del mes (mismo formato que ya tenés).
-3. La app:
-   - Parsea el CSV en el navegador (sin enviar a backend, sin guardar archivo).
-   - Cruza por `Device NO` (= `fixno`) contra `device_cuts_monthly` del tenant para ese período.
-4. Muestra una **tabla comparativa**:
+Pequeño ajuste a `AlertHistoryTable.tsx`:
+- Agregar prop opcional `showFixno?: boolean` (default `true`) para poder ocultar la columna Equipo cuando ya estamos viendo un único equipo.
 
-   ```text
-   Equipo            | CutABC (real) | Sistema | Diferencia | Estado
-   IRONTECH MARIQ.   |     118       |   115   |    -3      | ⚠ Menor
-   VIVOCELL OLMUE    |      86       |    86   |     0      | ✓ OK
-   FLAPIX            |      34       |   435   |  +401      | 🚨 Spike
-   (no en sistema)   |      21       |    -    |    -       | ❓ Falta
-   ```
+### Detalles técnicos
 
-5. Resumen arriba: **Total real vs Total sistema**, % de exactitud, cantidad de equipos OK / con desvíos / faltantes.
-6. Botón **"Exportar comparativa CSV"** para guardar registro.
+**Filtrado por fixno en AlertHistory**: el hook `useAlertHistory` ya enriquece cada entrada con `fixno` (extraído de `metadata.fixno` o parseado del `message_id`). Filtramos en el componente con `useMemo`:
+```ts
+const filtered = useMemo(
+  () => history.filter(h => h.fixno === device.fixno),
+  [history, device.fixno]
+);
+```
 
-Sin guardar nada en la base por ahora — es una herramienta de QA, no un proceso de corrección automática.
+**Activity badge en sin asignar**: usamos `getActivityState(device, lastCutDates)` que devuelve `"active" | "inactive"`. Esto requiere pasar también `total_cuts`/`fixno` al select del hook (fixno ya está). El cálculo es client-side con el map de `useLastCutDates`.
 
----
-
-## Reglas de cruce
-
-- **Match key**: `Device NO` del CSV ↔ `fixno` en `device_cuts_monthly`.
-- **Período**: el CSV no trae fecha → el usuario elige el mes en el selector. Se filtra `device_cuts_monthly` por `year_month = 'YYYY-MM'` y `tenant_id`.
-- **Tolerancia configurable** (default ±2 cortes): debajo de eso = ✓ OK, arriba = ⚠ desvío, >100 = 🚨 spike sospechoso.
-- **Equipos en CSV pero no en sistema** → fila "Falta en sistema".
-- **Equipos en sistema pero no en CSV** → fila "Falta en CutABC export" (puede pasar si el equipo no tuvo cortes en CutABC pero sí registros viejos).
-
----
-
-## Dónde se ubica
-
-Dentro de `src/pages/Setup.tsx`, agregar una nueva sección colapsable **"Control de cortes"** al final, junto a "Carga histórica" — no necesita ruta nueva, mantiene todo en un solo lugar.
-
-Si en el futuro querés un tab dedicado tipo `/setup?tab=control`, es un refactor menor; por ahora una sección más alcanza y es más simple.
-
----
-
-## Detalles técnicos
-
-**Archivos nuevos / modificados:**
-
-- `src/pages/Setup.tsx` → agregar `<NumberControlSection />` al final del stack.
-- `src/components/NumberControlSection.tsx` (nuevo) → toda la UI: selector de mes, file input, tabla, resumen, export.
-- `src/hooks/useMonthlyCutsForControl.ts` (nuevo) → query a `device_cuts_monthly` filtrando por `tenant_id` + `year_month`, joineada con `devices` para traer `branch_name` (más útil que `fixno` solo).
-- `src/lib/cutsControl.ts` (nuevo) → funciones puras: `parseCutabcCsv()`, `compareCuts()`, `exportComparisonCsv()`. Testeable sin React.
-
-**Parsing CSV:**
-
-- Usar parser simple manual (regex) o agregar `papaparse` (~7KB gz). Voto por `papaparse` porque maneja BOM (el CSV subido tiene `\ufeff`), comillas, escapes, etc. sin dolor.
-- Columnas requeridas: `Device NO`, `Usage Count`. Las demás se ignoran.
-- Validar formato; si falla, mostrar error claro ("El archivo no parece ser un export de CutABC. Esperaba columnas Device NO y Usage Count").
-
-**Sin cambios de backend:**
-
-- No nuevas tablas, no edge functions, no RLS. Solo lectura de `device_cuts_monthly` (que ya tiene RLS por tenant).
-- Toda la lógica corre en el cliente.
-
-**UX**:
-
-- Estados visuales: verde (OK), amarillo (desvío menor), rojo (spike), gris (faltante).
-- Ordenar por mayor desvío absoluto al tope para que los problemas salten a la vista.
-- Mostrar también el `Customer Name` del CSV para que el usuario reconozca rápido.
-
----
-
-## Por qué este enfoque
-
-- **Multi-tenant nativo**: cada usuario ve solo sus propios `device_cuts_monthly` por RLS, sin código extra.
-- **Sin acoplamiento a CutABC**: si mañana el formato del export cambia, solo tocás `parseCutabcCsv()`.
-- **No invasivo**: no escribe nada, no rompe nada, no consume API de CutABC. Pura inspección.
-- **Reutilizable**: el mismo flujo sirve para auditar abril, mayo, etc., y para validar después de cada `sync-cutabc` o backfill.
-- **Base para más**: si en el futuro querés que detecte automáticamente y genere alertas, ya tenés la lógica de comparación lista en `src/lib/cutsControl.ts`.
-
----
-
-## Fuera de alcance (decisiones explícitas)
-
-- **No corrige automáticamente** los datos del sistema. Si hay desvíos, vos decidís qué hacer (forzar sync, ajustar manualmente, investigar).
-- **No guarda historial de auditorías** en la base. Si querés eso después, agregamos una tabla `cuts_audit_log` — pero por ahora KISS.
-- **No soporta CSV con cortes diarios**. Solo totales mensuales por equipo (que es lo que CutABC exporta cómodamente).
+### Fuera de alcance
+- No se modifica el backend ni edge functions.
+- No se cambian otras tarjetas de la página de detalle.
+- No se agregan nuevas alertas ni cambia la lógica de envío.
