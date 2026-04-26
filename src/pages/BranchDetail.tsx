@@ -3,11 +3,13 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CutsTrafficLights, ConnectionTrafficLight } from "@/components/TrafficLights";
 import {
   ArrowLeft, Scissors,
-  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw
+  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw, Bell
 } from "lucide-react";
 import { useDevice, useLastCutDates, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, getDisconnectionDays, ACTIVITY_LABELS } from "@/hooks/useDevices";
 import { useCutsHistory, useMonthlyCuts } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
+import { useAlertHistory } from "@/hooks/useAlertHistory";
+import { AlertHistoryTable } from "@/components/AlertHistoryTable";
 import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
