@@ -80,6 +80,7 @@ export default function Dashboard() {
   const { data: rawLastCutDates } = useLastCutDates();
   const { data: rawAvgDailyCuts } = useAvgDailyCuts();
   const { data: rawMonthlyCutsMap } = useMonthlyCutsMap();
+  const { data: yesterdayCuts, isLoading: isYesterdayLoading } = useYesterdayCuts();
 
   // Filter cuts data to only include records from the assignment start date
   const lastCutDates = useMemo(() => {
@@ -234,6 +235,10 @@ export default function Dashboard() {
           clientFilter={clientFilter}
           navigate={navigate}
           onShowWelcome={() => setWelcomeForceOpen(true)}
+          yesterdayAssigned={yesterdayCuts?.assignedYesterday}
+          yesterdayUnassigned={yesterdayCuts?.unassignedYesterday}
+          avg7d={yesterdayCuts?.avg7d}
+          yesterdayLoading={isYesterdayLoading}
         />
 
         {/* Welcome banner (beta + acceso por invitación) */}
