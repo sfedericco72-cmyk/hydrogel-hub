@@ -9,6 +9,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLastCutDates, useAvgDailyCuts, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, type ActivityState } from "@/hooks/useDevices";
 import { useAssignedHierarchy, flatDevicesFromHierarchy, assignmentStartDates, type HierarchyClient } from "@/hooks/useAssignedHierarchy";
 import { sumLast6Months } from "@/lib/cuts";
+import { useYesterdayCuts } from "@/hooks/useYesterdayCuts";
+import { YesterdayCutsCard } from "@/components/YesterdayCutsCard";
 
 import { titleCase } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
