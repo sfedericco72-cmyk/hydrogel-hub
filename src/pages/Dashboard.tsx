@@ -373,17 +373,21 @@ export default function Dashboard() {
 
 /* ─── Sub-components ─────────────────────────────────── */
 
-function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate, onShowWelcome }: {
+function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate, onShowWelcome, yesterdayAssigned, yesterdayUnassigned, avg7d, yesterdayLoading }: {
   lastSyncDate: string | null;
   syncing: boolean;
   onSync: () => void;
   clientFilter: string;
   navigate: ReturnType<typeof useNavigate>;
   onShowWelcome: () => void;
+  yesterdayAssigned: number | undefined;
+  yesterdayUnassigned: number | undefined;
+  avg7d: number | undefined;
+  yesterdayLoading: boolean;
 }) {
   return (
-    <div className="mb-8 flex items-start justify-between">
-      <div>
+    <div className="mb-8 flex flex-col items-stretch gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="flex-1">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Panel de Control</h1>
           <button
@@ -401,7 +405,13 @@ function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate
           <span>Última sincronización: {formatSyncDate(lastSyncDate)}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <YesterdayCutsCard
+        assignedYesterday={yesterdayAssigned}
+        unassignedYesterday={yesterdayUnassigned}
+        avg7d={avg7d}
+        isLoading={yesterdayLoading}
+      />
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={onSync} disabled={syncing}
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
           <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
