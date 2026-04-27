@@ -1,73 +1,64 @@
 ## Objetivo
-Asegurar que el historial de alertas muestre las alertas viejas (donde `metadata` está vacío) y mejorar el fallback para resolver `fixno`/`pdv` sin depender solo de metadata.
 
-## Diagnóstico confirmado
-- Las alertas del **20-abr-2026** tienen `metadata: null` en `email_send_log` y `message_id` es un UUID puro (no contiene el fixno).
-- `useAlertHistory.ts` actualmente intenta resolver `fixno` desde `metadata.fixno` o desde un regex sobre `message_id` con formato `template-fixno-fecha`. Como ninguno aplica, `fixno = null` y la fila no aparece en el historial filtrado por equipo.
-- Las alertas **nuevas** (a partir del despliegue del check-alerts con `baseMetadata`) ya quedan con metadata correcta — ese flujo está OK. El problema es solo histórico.
+Mostrar de forma prominente en el header del **Panel de Control** la cantidad de cortes reportados ayer, para que se vea de un vistazo al entrar al dashboard.
 
-## Cambios
+## Diseño visual
 
-### 1. Mejorar el fallback de resolución en `useAlertHistory.ts`
-Cuando `metadata` está vacío y el regex sobre `message_id` no matchea, agregar un tercer paso de resolución:
+Bloque destacado a la derecha del título "Panel de Control" (antes de los botones de acción), con dos números:
 
-- **Resolver PdV por `recipient_email`** (ya existe esa lógica, pero solo se usaba como respaldo de `pdv_id`).
-- Si el `recipient_email` corresponde al `bcc_email` del tenant (caso `email-no-configurado`), no se puede resolver PdV por email → quedar con `pdv_name = null`.
-- **Resolver `fixno` desde el PdV resuelto**: si el PdV tiene exactamente **un** equipo activo asignado, asumir ese fixno. Si tiene varios, dejar `fixno = null` (no podemos adivinar).
+- **Número grande**: cortes de ayer de equipos asignados (global, no se ve afectado por el filtro de cliente).
+- **Número chico debajo**: cortes de ayer de equipos NO asignados (solo aparece si es > 0).
+- **Línea de contexto**: "Promedio últimos 7 días: X" como referencia.
 
-Esto cubre el caso típico: 1 PdV = 1 equipo. Para HX007190821143217 → PdV `San_Cristobal_Inversiones` tiene solo ese equipo asignado → la alerta del 20-abr aparecerá en el historial del equipo.
+Maquetación aproximada (1257px viewport actual):
 
-### 2. Mostrar alertas "huérfanas" en el historial del PdV
-En `BranchDetail.tsx` el filtro actual es:
-```ts
-history.filter(h => h.fixno === device.fixno)
-```
-Cambiarlo a:
-```ts
-history.filter(h => h.fixno === device.fixno || (h.pdv_id === pdvId && !h.fixno))
-```
-Para que las viejas (donde no se pudo resolver fixno pero sí PdV) aparezcan también en el detalle del equipo cuando el PdV solo tiene ese equipo.
-
-### 3. (Opcional, recomendado) Backfill de metadata
-Ejecutar un INSERT/UPDATE one-shot vía `supabase--execute_sql` para rellenar `metadata` de las filas viejas donde podamos resolver `pdv_id` y `fixno` por email + asignación activa. Esto deja la base "limpia" y no depende del fallback en runtime.
-
-Solo aplicaría a alertas con `template_name IN ('stock-bajo','dispositivo-desconectado')` y donde `metadata IS NULL`. Para `email-no-configurado` (que va a BCC) habría que parsear `message_id` con el formato viejo `no-email-{stock|desconectado}-{fixno}-{fecha}` si existe — si no, dejarlas como están.
-
-## Detalles técnicos
-**Archivo `src/hooks/useAlertHistory.ts` — bloque enriquecido:**
-```ts
-// Nuevo: si tras resolver pdv aún no tenemos fixno, intentar inferirlo
-// desde la asignación única del PdV.
-const pdvFixnos = new Map<string, string[]>(); // pdv_id → fixnos activos
-assigns.forEach((a: any) => {
-  const fx = a.devices?.fixno;
-  if (fx && a.point_of_sale_id) {
-    const arr = pdvFixnos.get(a.point_of_sale_id) ?? [];
-    arr.push(fx);
-    pdvFixnos.set(a.point_of_sale_id, arr);
-  }
-});
-// ...dentro del map de enrichment, después de resolver pdvId:
-if (!fixno && pdvId) {
-  const fxList = pdvFixnos.get(pdvId) ?? [];
-  if (fxList.length === 1) fixno = fxList[0];
-}
+```text
+┌──────────────────────────────────┐  ┌──────────────────────┐  ┌── botones ──┐
+│ Panel de Control       (i)       │  │ Cortes ayer          │  │ [Sincr.]    │
+│ Seguimiento de máquinas...       │  │   1.234              │  │ [Attach]    │
+│ ⏱ Última sincronización: ...     │  │ +18 sin asignar      │  │ [Clientes]  │
+│                                  │  │ prom. 7d: 1.050      │  │ [⚙] [⎋]    │
+└──────────────────────────────────┘  └──────────────────────┘  └─────────────┘
 ```
 
-**Archivo `src/pages/BranchDetail.tsx` — filtro:**
-```ts
-const filtered = useMemo(() => {
-  return alertHistory.filter(h =>
-    h.fixno === device.fixno ||
-    (h.pdv_id === pdvId && !h.fixno && pdvFixnos.length === 1)
-  );
-}, [alertHistory, device.fixno, pdvId]);
-```
-(Necesito verificar de dónde viene `pdvId` en ese componente; probablemente del `useAssignedHierarchy` o de la asignación activa del device.)
+Estilo: tarjeta con `bg-card`, borde sutil, número en `text-3xl font-bold` con color `text-primary`, etiqueta en `text-xs uppercase text-muted-foreground`. En mobile pasa a stack vertical debajo del título.
 
-## Lo que NO se hace
-- No tocar `send-transactional-email` ni `process-email-queue` — ya persisten metadata correctamente.
-- No tocar `check-alerts` — ya envía con `baseMetadata`.
+## Datos y reglas
 
-## ¿Hago también el backfill de metadata?
-Es una opción "extra" que limpia la base. Recomiendo hacerlo después de validar que el fallback en runtime funciona — así no rompemos nada.
+- **"Ayer"** se calcula en la zona horaria del tenant (`tenant_settings.timezone`, default `America/Santiago`) para evitar el desfase UTC.
+- **Cortes ayer (asignados)**: suma de `device_cuts_daily.daily_cuts` para `cut_date = ayer`, filtrando por `fixno` que esté actualmente en `device_assignments` activos (`unassigned_at IS NULL`). **No respeta el filtro de cliente** — siempre global.
+- **Cortes ayer (no asignados)**: misma suma pero para `fixno` que NO esté en ninguna asignación activa. Solo se muestra si > 0.
+- **Promedio últimos 7 días**: media diaria de `daily_cuts` de los últimos 7 días completos (excluye hoy), solo equipos asignados, redondeado.
+
+## Cambios técnicos
+
+### 1. Nuevo hook `src/hooks/useYesterdayCuts.ts`
+
+- Expone `{ assignedYesterday, unassignedYesterday, avg7d, isLoading }`.
+- Usa `useTenantSettings` para obtener el `timezone` y calcular el rango "ayer" como `[ayer 00:00, hoy 00:00)` en esa TZ → convertido a `YYYY-MM-DD` para `cut_date`.
+- Una sola query a `device_cuts_daily` con `cut_date >= ayer-6d AND cut_date <= ayer`, trayendo `fixno, cut_date, daily_cuts`.
+- Una segunda query liviana a `device_assignments` (where `unassigned_at IS NULL`) para construir el set de fixnos asignados (o reutilizar `useAssignedHierarchy` ya disponible en Dashboard).
+- Agrega los totales en memoria (sin agregaciones nuevas en DB).
+
+### 2. Componente `src/components/YesterdayCutsCard.tsx`
+
+- Recibe `{ assignedYesterday, unassignedYesterday, avg7d, isLoading }`.
+- Skeleton mientras carga.
+- Formatea con `toLocaleString("es-CL")` para separadores de miles.
+- Tooltip en el bloque "sin asignar" explicando "Cortes de equipos detectados por la API que aún no tienen punto de venta asignado".
+
+### 3. `src/pages/Dashboard.tsx`
+
+- Importar el hook y el componente.
+- Insertar `<YesterdayCutsCard ... />` en el header `DashboardHeader` (lines 377-421), entre el bloque del título y el bloque de botones, con un wrapper flex que mantenga buen comportamiento responsive (en `md:` queda al medio, en mobile cae debajo del título).
+- Pasar las props desde Dashboard (el hook se llama en Dashboard y se pasan los valores ya calculados al header, siguiendo el patrón actual de `lastSyncDate`).
+
+## Lo que NO cambia
+
+- No se modifica la base de datos ni se crean agregaciones nuevas.
+- El filtro de cliente sigue funcionando igual para el resto del dashboard; el número grande es siempre global por diseño.
+- No se tocan los emails de alertas ni la lógica de `alert_history`.
+
+## Aclaración pendiente menor
+
+Si querés, en lugar de "+18 sin asignar" como número chico debajo, puedo mostrarlo como una segunda mini-tarjeta al costado. Lo dejo así (apilado debajo) por ser más compacto, pero es trivial cambiarlo después.
