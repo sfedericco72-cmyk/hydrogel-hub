@@ -1,64 +1,58 @@
-## Objetivo
+# Revisión de alertas (solo diagnóstico)
 
-Mostrar de forma prominente en el header del **Panel de Control** la cantidad de cortes reportados ayer, para que se vea de un vistazo al entrar al dashboard.
+No toqué nada. Esto es lo que encontré, ordenado por gravedad.
 
-## Diseño visual
+## Resumen
 
-Bloque destacado a la derecha del título "Panel de Control" (antes de los botones de acción), con dos números:
+Las alertas **no se están enviando desde el 12 de junio de 2026** (último registro en el log de envíos; hoy es 25 de agosto). Hay tres causas independientes, todas reales y verificadas.
 
-- **Número grande**: cortes de ayer de equipos asignados (global, no se ve afectado por el filtro de cliente).
-- **Número chico debajo**: cortes de ayer de equipos NO asignados (solo aparece si es > 0).
-- **Línea de contexto**: "Promedio últimos 7 días: X" como referencia.
+## Hallazgo 1 — El cron corta la ejecución a los 5 segundos (causa técnica principal)
 
-Maquetación aproximada (1257px viewport actual):
+El job horario `check-device-alerts` llama a la función por HTTP desde la base. **Todas** las llamadas de las últimas horas terminaron así:
 
 ```text
-┌──────────────────────────────────┐  ┌──────────────────────┐  ┌── botones ──┐
-│ Panel de Control       (i)       │  │ Cortes ayer          │  │ [Sincr.]    │
-│ Seguimiento de máquinas...       │  │   1.234              │  │ [Attach]    │
-│ ⏱ Última sincronización: ...     │  │ +18 sin asignar      │  │ [Clientes]  │
-│                                  │  │ prom. 7d: 1.050      │  │ [⚙] [⎋]    │
-└──────────────────────────────────┘  └──────────────────────┘  └─────────────┘
+09:00 UTC  error: Timeout of 5000 ms reached
+10:00 UTC  error: Timeout of 5000 ms reached
+11:00 UTC  error: Timeout of 5000 ms reached
+12:00 UTC  error: Timeout of 5000 ms reached
 ```
 
-Estilo: tarjeta con `bg-card`, borde sutil, número en `text-3xl font-bold` con color `text-primary`, etiqueta en `text-xs uppercase text-muted-foreground`. En mobile pasa a stack vertical debajo del título.
+La función en sí está sana: la invoqué manualmente y respondió 200 correctamente. El problema es que el llamador de la base tiene un límite de 5 segundos y la revisión de ~474 equipos tarda minutos, así que la conexión se corta a mitad de camino y no hay garantía de que el proceso termine. Tampoco quedan logs de la función en esas corridas.
 
-## Datos y reglas
+**Propuesta:** que el cron dispare la función en modo "fire and forget" con timeout amplio, y que la función responda de inmediato y haga el trabajo en background (mismo patrón que ya usamos en el backfill de cortes, que tenía exactamente este problema). Opcionalmente, registrar cada corrida en una tabla para poder auditar "última revisión de alertas" desde la UI.
 
-- **"Ayer"** se calcula en la zona horaria del tenant (`tenant_settings.timezone`, default `America/Santiago`) para evitar el desfase UTC.
-- **Cortes ayer (asignados)**: suma de `device_cuts_daily.daily_cuts` para `cut_date = ayer`, filtrando por `fixno` que esté actualmente en `device_assignments` activos (`unassigned_at IS NULL`). **No respeta el filtro de cliente** — siempre global.
-- **Cortes ayer (no asignados)**: misma suma pero para `fixno` que NO esté en ninguna asignación activa. Solo se muestra si > 0.
-- **Promedio últimos 7 días**: media diaria de `daily_cuts` de los últimos 7 días completos (excluye hoy), solo equipos asignados, redondeado.
+## Hallazgo 2 — Casi todos los PdV quedaron con alertas apagadas y nunca se reactivan
 
-## Cambios técnicos
+| Tenant | PdV | Con alertas ON | Apagados | Sin email |
+|---|---|---|---|---|
+| Bitec | 28 | 2 | 26 | 4 |
+| KLAZ | 4 | 3 | 1 | 4 |
 
-### 1. Nuevo hook `src/hooks/useYesterdayCuts.ts`
+En todo el sistema hay **34 equipos asignados y solo 2 realmente alertables**.
 
-- Expone `{ assignedYesterday, unassignedYesterday, avg7d, isLoading }`.
-- Usa `useTenantSettings` para obtener el `timezone` y calcular el rango "ayer" como `[ayer 00:00, hoy 00:00)` en esa TZ → convertido a `YYYY-MM-DD` para `cut_date`.
-- Una sola query a `device_cuts_daily` con `cut_date >= ayer-6d AND cut_date <= ayer`, trayendo `fixno, cut_date, daily_cuts`.
-- Una segunda query liviana a `device_assignments` (where `unassigned_at IS NULL`) para construir el set de fixnos asignados (o reutilizar `useAssignedHierarchy` ya disponible en Dashboard).
-- Agrega los totales en memoria (sin agregaciones nuevas en DB).
+El motivo es la regla `alert_max_window_days = 14`: cuando pasan 14 días desde la primera alerta de un equipo, `check-alerts` apaga `alerts_enabled` del PdV. Como nadie lo vuelve a encender a mano, el apagado es **permanente** — 71 de 172 equipos de Bitec ya tienen `first_alert_sent_at`, y sus PdV fueron quedando mudos uno por uno.
 
-### 2. Componente `src/components/YesterdayCutsCard.tsx`
+**Propuesta (a elegir):**
+1. Reactivación automática: en vez de apagar el PdV para siempre, "silenciar" el equipo por N días (ej. 30) y luego volver a evaluarlo. Requiere guardar la fecha de silenciado por equipo en lugar de apagar el PdV.
+2. Apagar por equipo, no por PdV: hoy un solo equipo vencido silencia todo el punto de venta, incluidos sus otros equipos.
+3. Visibilidad: mostrar en la UI un panel "PdV con alertas apagadas" con el motivo y la fecha, y un botón para reactivar en lote.
 
-- Recibe `{ assignedYesterday, unassignedYesterday, avg7d, isLoading }`.
-- Skeleton mientras carga.
-- Formatea con `toLocaleString("es-CL")` para separadores de miles.
-- Tooltip en el bloque "sin asignar" explicando "Cortes de equipos detectados por la API que aún no tienen punto de venta asignado".
+## Hallazgo 3 — KLAZ tiene las alertas pausadas hasta 2027
 
-### 3. `src/pages/Dashboard.tsx`
+`alerts_paused_until = 2027-01-01`. Mientras esté así, KLAZ nunca va a recibir nada. Además sus 4 PdV no tienen `alert_email`, así que incluso despausado solo generaría avisos de "email no configurado" al BCC.
 
-- Importar el hook y el componente.
-- Insertar `<YesterdayCutsCard ... />` en el header `DashboardHeader` (lines 377-421), entre el bloque del título y el bloque de botones, con un wrapper flex que mantenga buen comportamiento responsive (en `md:` queda al medio, en mobile cae debajo del título).
-- Pasar las props desde Dashboard (el hook se llama en Dashboard y se pasan los valores ya calculados al header, siguiendo el patrón actual de `lastSyncDate`).
+**Propuesta:** decidir si esa pausa es intencional. Si no, quitarla y cargar los emails de los 4 PdV de KLAZ.
 
-## Lo que NO cambia
+## Lo que sí está funcionando
 
-- No se modifica la base de datos ni se crean agregaciones nuevas.
-- El filtro de cliente sigue funcionando igual para el resto del dashboard; el número grande es siempre global por diseño.
-- No se tocan los emails de alertas ni la lógica de `alert_history`.
+- El sync diario corre bien: último `last_synced_at` de hoy 02:59 UTC en ambos tenants, y equipos conectados hasta hace minutos.
+- La función `check-alerts` está desplegada y responde correctamente; respeta la hora configurada (9 AM `America/Santiago`) y saltea tenants pausados.
+- La cadena de envío (cola de emails, metadata para el historial) quedó bien después de los cambios anteriores.
 
-## Aclaración pendiente menor
+## Orden sugerido si querés que avance
 
-Si querés, en lugar de "+18 sin asignar" como número chico debajo, puedo mostrarlo como una segunda mini-tarjeta al costado. Lo dejo así (apilado debajo) por ser más compacto, pero es trivial cambiarlo después.
+1. Arreglar el timeout del cron (sin esto, nada más importa).
+2. Rediseñar el apagado automático de alertas + panel de reactivación.
+3. Definir la situación de KLAZ (pausa y emails de PdV).
+
+No implemento nada hasta que me digas cuáles de estos puntos querés atacar.
