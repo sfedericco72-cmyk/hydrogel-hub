@@ -3,18 +3,20 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CutsTrafficLights, ConnectionTrafficLight } from "@/components/TrafficLights";
 import {
   ArrowLeft, Scissors,
-  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw, Bell
+  Phone, User, Clock, HardDrive, Package, Globe, BarChart3, RefreshCw, Bell, BellOff
 } from "lucide-react";
 import { useDevice, useLastCutDates, useMonthlyCutsMap, getActivityState, isDeviceDisconnected, getDisconnectionDays, ACTIVITY_LABELS } from "@/hooks/useDevices";
 import { useCutsHistory, useMonthlyCuts } from "@/hooks/useCutsHistory";
 import { useDeviceTransactions } from "@/hooks/useTransactions";
 import { useAlertHistory } from "@/hooks/useAlertHistory";
+import { useUnmuteDevices } from "@/hooks/useAlertsHealth";
 import { AlertHistoryTable } from "@/components/AlertHistoryTable";
 import { titleCase } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 function formatDateTime(dateStr: string | null) {
   if (!dateStr) return "—";
@@ -266,6 +268,34 @@ export default function BranchDetail() {
             {titleCase(device.customer_name) || "Sin cliente"} · <span className="font-mono text-xs">{device.fixno}</span>
           </p>
         </div>
+
+        {device.alerts_muted_until && new Date(device.alerts_muted_until) > new Date() && (
+          <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            <BellOff className="h-4 w-4 shrink-0 text-amber-400" />
+            <div className="flex-1">
+              <p className="font-medium text-amber-400">Alertas silenciadas para este equipo</p>
+              <p className="text-xs text-muted-foreground">
+                {device.alerts_mute_reason ?? "Silenciado por el sistema"} · vuelve el{" "}
+                {new Date(device.alerts_muted_until).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" })}
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  await unmute.mutateAsync([device.id]);
+                  toast.success("Alertas reactivadas para este equipo");
+                } catch (e: any) {
+                  toast.error("Error: " + e.message);
+                }
+              }}
+              disabled={unmute.isPending}
+              className="rounded-md border border-input px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              Reactivar ahora
+            </button>
+          </div>
+        )}
+
 
         {/* Status Grid */}
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

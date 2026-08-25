@@ -163,7 +163,7 @@ export function useUnmuteDevices() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["muted-devices"] });
-      qc.invalidateQueries({ queryKey: ["device"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
     },
   });
 }
