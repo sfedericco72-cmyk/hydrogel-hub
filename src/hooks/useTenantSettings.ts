@@ -21,6 +21,7 @@ export interface TenantSettings {
   connection_yellow_days: number;
   alert_cooldown_days: number;
   alert_max_window_days: number;
+  alert_mute_days: number;
   alerts_check_hour: number;
   alerts_paused_until: string | null;
   created_at: string;
