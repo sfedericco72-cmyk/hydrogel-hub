@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_check_runs: {
+        Row: {
+          alerts_sent: Json | null
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          forced: boolean
+          id: string
+          started_at: string
+          status: string
+          tenant_id: string | null
+          tenants_processed: number
+          tenants_skipped: Json | null
+          updated_at: string
+        }
+        Insert: {
+          alerts_sent?: Json | null
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          forced?: boolean
+          id?: string
+          started_at?: string
+          status?: string
+          tenant_id?: string | null
+          tenants_processed?: number
+          tenants_skipped?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          alerts_sent?: Json | null
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          forced?: boolean
+          id?: string
+          started_at?: string
+          status?: string
+          tenant_id?: string | null
+          tenants_processed?: number
+          tenants_skipped?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_check_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       allowed_emails: {
         Row: {
           added_by: string | null
@@ -365,6 +418,8 @@ export type Database = {
           address: string | null
           alert_email: string | null
           alerts_enabled: boolean
+          alerts_mute_reason: string | null
+          alerts_muted_until: string | null
           branch_name: string | null
           city: string | null
           condition: string | null
@@ -393,6 +448,8 @@ export type Database = {
           address?: string | null
           alert_email?: string | null
           alerts_enabled?: boolean
+          alerts_mute_reason?: string | null
+          alerts_muted_until?: string | null
           branch_name?: string | null
           city?: string | null
           condition?: string | null
@@ -421,6 +478,8 @@ export type Database = {
           address?: string | null
           alert_email?: string | null
           alerts_enabled?: boolean
+          alerts_mute_reason?: string | null
+          alerts_muted_until?: string | null
           branch_name?: string | null
           city?: string | null
           condition?: string | null
@@ -706,6 +765,7 @@ export type Database = {
         Row: {
           alert_cooldown_days: number
           alert_max_window_days: number
+          alert_mute_days: number
           alerts_check_hour: number
           alerts_paused_until: string | null
           attach_rate_green: number
@@ -734,6 +794,7 @@ export type Database = {
         Insert: {
           alert_cooldown_days?: number
           alert_max_window_days?: number
+          alert_mute_days?: number
           alerts_check_hour?: number
           alerts_paused_until?: string | null
           attach_rate_green?: number
@@ -762,6 +823,7 @@ export type Database = {
         Update: {
           alert_cooldown_days?: number
           alert_max_window_days?: number
+          alert_mute_days?: number
           alerts_check_hour?: number
           alerts_paused_until?: string | null
           attach_rate_green?: number

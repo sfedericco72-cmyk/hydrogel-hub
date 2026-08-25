@@ -6,6 +6,7 @@ import { useBackfillStatus, useRunBackfill } from "@/hooks/useBackfillHistory";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { NumberControlSection } from "@/components/NumberControlSection";
+import { AlertsHealthSection } from "@/components/AlertsHealthSection";
 
 const TIMEZONES = [
   { value: "America/Santiago", label: "Santiago de Chile (GMT-3/-4)" },
@@ -38,6 +39,7 @@ export default function Setup() {
     connection_yellow_days: 14,
     alert_cooldown_days: 7,
     alert_max_window_days: 14,
+    alert_mute_days: 30,
     alerts_check_hour: 9,
   });
 
@@ -59,6 +61,7 @@ export default function Setup() {
         connection_yellow_days: settings.connection_yellow_days,
         alert_cooldown_days: settings.alert_cooldown_days,
         alert_max_window_days: settings.alert_max_window_days,
+        alert_mute_days: settings.alert_mute_days ?? 30,
         alerts_check_hour: settings.alerts_check_hour ?? 9,
       });
     }
@@ -86,6 +89,7 @@ export default function Setup() {
         connection_yellow_days: form.connection_yellow_days,
         alert_cooldown_days: form.alert_cooldown_days,
         alert_max_window_days: form.alert_max_window_days,
+        alert_mute_days: form.alert_mute_days,
         alerts_check_hour: form.alerts_check_hour,
       });
       toast.success("Configuración guardada");
@@ -189,10 +193,14 @@ export default function Setup() {
 
           {/* Alertas */}
           <Section icon={<Bell className="h-4 w-4" />} title="Alertas por Email">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <NumberField label="Cooldown entre alertas (días)" value={form.alert_cooldown_days} onChange={v => handleChange("alert_cooldown_days", v)} min={1} max={30} />
               <NumberField label="Ventana máxima de alertas (días)" value={form.alert_max_window_days} onChange={v => handleChange("alert_max_window_days", v)} min={1} max={60} />
+              <NumberField label="Días de silenciado del equipo" value={form.alert_mute_days} onChange={v => handleChange("alert_mute_days", v)} min={1} max={180} />
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Al vencer la ventana máxima sin resolverse, el equipo (no el PdV) se silencia por la cantidad de días indicada y después vuelve solo al circuito.
+            </p>
           </Section>
 
           {/* Horario y disparo de alertas */}
@@ -201,11 +209,15 @@ export default function Setup() {
             onChangeHour={v => handleChange("alerts_check_hour", v)}
           />
 
+          {/* Estado de alertas */}
+          <AlertsHealthSection />
+
           {/* Backfill */}
           <BackfillSection />
 
           {/* Control de números */}
           <NumberControlSection />
+
 
         </div>
       </div>
@@ -265,16 +277,10 @@ function AlertScheduleSection({ currentHour, onChangeHour }: { currentHour: numb
         body: { force: true },
       });
       if (error) throw error;
-      const totals = data?.by_template ?? {};
-      const total = data?.alerts_sent ?? 0;
-      if (total === 0) {
-        toast.success("Disparado: no había alertas pendientes para enviar");
+      if (data?.accepted === false) {
+        toast.info("Ya hay una revisión de alertas en curso.");
       } else {
-        const parts: string[] = [];
-        if (totals["stock-bajo"]) parts.push(`${totals["stock-bajo"]} stock bajo`);
-        if (totals["dispositivo-desconectado"]) parts.push(`${totals["dispositivo-desconectado"]} desconectado`);
-        if (totals["email-no-configurado"]) parts.push(`${totals["email-no-configurado"]} sin email`);
-        toast.success(`${total} alerta${total !== 1 ? "s" : ""} encolada${total !== 1 ? "s" : ""}: ${parts.join(", ")}`);
+        toast.success("Revisión iniciada. El resultado aparece en «Estado de alertas» al terminar.");
       }
     } catch (e: any) {
       toast.error("Error al disparar alertas: " + (e.message || e));
@@ -282,6 +288,7 @@ function AlertScheduleSection({ currentHour, onChangeHour }: { currentHour: numb
       setTriggering(false);
     }
   }
+
 
   return (
     <Section icon={<Calendar className="h-4 w-4" />} title="Horario y Disparo de Alertas">
