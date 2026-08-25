@@ -129,6 +129,7 @@ export default function BranchDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: device, isLoading } = useDevice(id);
+  const unmute = useUnmuteDevices();
   const { data: history = [] } = useCutsHistory(device?.fixno);
   const { data: monthlyHistory = [] } = useMonthlyCuts(device?.fixno);
   const { data: transactions = [] } = useDeviceTransactions(device?.fixno);
