@@ -47,7 +47,16 @@ function addDays(ymd: string, delta: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+export interface UnassignedYesterdayDevice {
+  id: string | null;
+  fixno: string;
+  branch_name: string | null;
+  customer_name: string | null;
+  cuts: number;
+}
+
 export interface YesterdayCutsResult {
+  unassignedDevices: UnassignedYesterdayDevice[];
   yesterdayDate: string; // YYYY-MM-DD in tenant TZ
   assignedYesterday: number;
   unassignedYesterday: number;
@@ -104,6 +113,7 @@ export function useYesterdayCuts() {
       let assignedYesterday = 0;
       let unassignedYesterday = 0;
       let assigned7dTotal = 0;
+      const unassignedMap = new Map<string, number>();
 
       for (const r of rows) {
         const cuts = r.daily_cuts ?? 0;
@@ -111,9 +121,34 @@ export function useYesterdayCuts() {
         const isAssigned = assignedFixnos.has(r.fixno);
         if (r.cut_date === yesterday) {
           if (isAssigned) assignedYesterday += cuts;
-          else unassignedYesterday += cuts;
+          else {
+            unassignedYesterday += cuts;
+            unassignedMap.set(r.fixno, (unassignedMap.get(r.fixno) ?? 0) + cuts);
+          }
         }
         if (isAssigned) assigned7dTotal += cuts;
+      }
+
+      let unassignedDevices: UnassignedYesterdayDevice[] = [];
+      const fx = Array.from(unassignedMap.keys());
+      if (fx.length > 0) {
+        const { data: info } = await supabase
+          .from("devices")
+          .select("id, fixno, branch_name, customer_name")
+          .in("fixno", fx);
+        const byFix = new Map((info ?? []).map((d) => [d.fixno, d]));
+        unassignedDevices = fx
+          .map((f) => {
+            const d = byFix.get(f);
+            return {
+              id: d?.id ?? null,
+              fixno: f,
+              branch_name: d?.branch_name ?? null,
+              customer_name: d?.customer_name ?? null,
+              cuts: unassignedMap.get(f) ?? 0,
+            };
+          })
+          .sort((a, b) => b.cuts - a.cuts);
       }
 
       const avg7d = Math.round(assigned7dTotal / 7);
@@ -122,6 +157,7 @@ export function useYesterdayCuts() {
         yesterdayDate: yesterday,
         assignedYesterday,
         unassignedYesterday,
+        unassignedDevices,
         avg7d,
       };
     },

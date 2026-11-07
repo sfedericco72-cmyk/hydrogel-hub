@@ -1205,7 +1205,7 @@ export default function ClientsManager() {
 
 // ── Pick PdV Dialog (for unassigned-section "Asignar" button) ──
 
-function PickPdvDialog({
+export function PickPdvDialog({
   deviceId,
   tenantId,
   onClose,
