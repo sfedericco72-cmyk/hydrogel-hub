@@ -1,4 +1,36 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { sendTemplateEmail } from '../_shared/transactional-email-templates/send-email.ts'
+
+// Sends one alert email and records the outcome in email_send_log (used for
+// cooldowns and the alert history). skipLog = monitoring copies (BCC).
+async function sendAndLog(
+  supabase: any,
+  templateName: string,
+  recipientEmail: string,
+  opts: { idempotencyKey: string; templateData: Record<string, any>; metadata: Record<string, any>; skipLog?: boolean },
+): Promise<void> {
+  const log = async (row: Record<string, any>) => {
+    if (opts.skipLog) return
+    const { error } = await supabase.from('email_send_log').insert({
+      message_id: opts.idempotencyKey,
+      template_name: templateName,
+      recipient_email: recipientEmail,
+      metadata: opts.metadata,
+      ...row,
+    })
+    if (error) console.error('email_send_log insert failed', { code: error.code, message: error.message })
+  }
+  try {
+    const result = await sendTemplateEmail(templateName, recipientEmail, {
+      templateData: opts.templateData,
+      idempotencyKey: opts.idempotencyKey,
+    })
+    await log({ status: result.sent ? 'sent' : 'suppressed' })
+  } catch (err) {
+    console.error('Email send failed', { templateName, error: (err as Error).message })
+    await log({ status: 'failed', error_message: (err as Error).message })
+  }
+}
 
 // Defaults — overridden per tenant from tenant_settings
 const DEFAULT_LOW_STOCK_DAYS = 7
@@ -350,10 +382,7 @@ async function trySendAlert(
 
     if (recent?.length) return { sent: false, template: templateName }
 
-    await supabase.functions.invoke('send-transactional-email', {
-      body: {
-        templateName: 'email-no-configurado',
-        recipientEmail: bccEmail,
+    await sendAndLog(supabase, 'email-no-configurado', bccEmail, {
         idempotencyKey: `no-email-${templateName === 'stock-bajo' ? 'stock' : 'desconectado'}-${device.fixno}-${today}`,
         templateData: {
           branchName: templateData.branchName,
@@ -364,7 +393,6 @@ async function trySendAlert(
           logoUrl: templateData.logoUrl,
         },
         metadata: { ...baseMetadata, alert_type: 'email-no-configurado' },
-      },
     })
 
     if (!device.first_alert_sent_at) {
@@ -385,27 +413,19 @@ async function trySendAlert(
   if (recentAlert?.length) return { sent: false, template: templateName }
 
   // Primary send to PdV — logged with enriched metadata
-  await supabase.functions.invoke('send-transactional-email', {
-    body: {
-      templateName,
-      recipientEmail,
-      idempotencyKey: `${templateName}-${device.fixno}-${today}`,
-      templateData,
-      metadata: baseMetadata,
-    },
+  await sendAndLog(supabase, templateName, recipientEmail!, {
+    idempotencyKey: `${templateName}-${device.fixno}-${today}`,
+    templateData,
+    metadata: baseMetadata,
   })
 
   // BCC copy — sent for monitoring but NOT logged (one alert = one history row)
   if (bccEmail) {
-    await supabase.functions.invoke('send-transactional-email', {
-      body: {
-        templateName,
-        recipientEmail: bccEmail,
-        idempotencyKey: `${templateName}-bcc-${device.fixno}-${today}`,
-        templateData,
-        metadata: baseMetadata,
-        skipLog: true,
-      },
+    await sendAndLog(supabase, templateName, bccEmail, {
+      idempotencyKey: `${templateName}-bcc-${device.fixno}-${today}`,
+      templateData,
+      metadata: baseMetadata,
+      skipLog: true,
     })
   }
 
