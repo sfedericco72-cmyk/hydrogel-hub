@@ -252,6 +252,7 @@ export function useAssignDevice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["device-assignments"] });
       qc.invalidateQueries({ queryKey: ["unassigned-devices"] });
+      qc.invalidateQueries({ queryKey: ["yesterday-cuts"] });
       qc.invalidateQueries({ queryKey: ["client-assignment-counts"] });
     },
   });

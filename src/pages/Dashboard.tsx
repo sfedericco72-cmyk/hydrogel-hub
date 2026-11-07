@@ -408,6 +408,7 @@ function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate
       <YesterdayCutsCard
         assignedYesterday={yesterdayAssigned}
         unassignedYesterday={yesterdayUnassigned}
+        unassignedDevices={yesterdayCuts?.unassignedDevices}
         avg7d={avg7d}
         isLoading={yesterdayLoading}
       />
