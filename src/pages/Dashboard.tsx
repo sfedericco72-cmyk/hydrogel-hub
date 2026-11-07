@@ -237,6 +237,7 @@ export default function Dashboard() {
           onShowWelcome={() => setWelcomeForceOpen(true)}
           yesterdayAssigned={yesterdayCuts?.assignedYesterday}
           yesterdayUnassigned={yesterdayCuts?.unassignedYesterday}
+          yesterdayUnassignedDevices={yesterdayCuts?.unassignedDevices}
           avg7d={yesterdayCuts?.avg7d}
           yesterdayLoading={isYesterdayLoading}
         />
@@ -373,7 +374,7 @@ export default function Dashboard() {
 
 /* ─── Sub-components ─────────────────────────────────── */
 
-function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate, onShowWelcome, yesterdayAssigned, yesterdayUnassigned, avg7d, yesterdayLoading }: {
+function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate, onShowWelcome, yesterdayAssigned, yesterdayUnassigned, yesterdayUnassignedDevices, avg7d, yesterdayLoading }: {
   lastSyncDate: string | null;
   syncing: boolean;
   onSync: () => void;
@@ -382,6 +383,7 @@ function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate
   onShowWelcome: () => void;
   yesterdayAssigned: number | undefined;
   yesterdayUnassigned: number | undefined;
+  yesterdayUnassignedDevices?: import("@/hooks/useYesterdayCuts").UnassignedYesterdayDevice[];
   avg7d: number | undefined;
   yesterdayLoading: boolean;
 }) {
@@ -408,7 +410,7 @@ function DashboardHeader({ lastSyncDate, syncing, onSync, clientFilter, navigate
       <YesterdayCutsCard
         assignedYesterday={yesterdayAssigned}
         unassignedYesterday={yesterdayUnassigned}
-        unassignedDevices={yesterdayCuts?.unassignedDevices}
+        unassignedDevices={yesterdayUnassignedDevices}
         avg7d={avg7d}
         isLoading={yesterdayLoading}
       />
